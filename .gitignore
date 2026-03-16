@@ -1,0 +1,35 @@
+# === SENSITIVE — NEVER COMMIT ===
+config/             # contains secret.key (Fernet encryption key)
+config/secret.key
+
+# === GENERATED FILES ===
+vouchers/           # generated PDFs, QR images, metadata
+backup/             # robocopy backup target
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# === DATABASE ===
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# === ENVIRONMENT ===
+.env
+.venv/
+venv/
+env/
+
+# === IDE ===
+.vscode/
+.idea/
+*.suo
+*.user
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
