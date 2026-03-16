@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>שובר מתנה — גלים ונפש</title>
 
-  <!-- Google Font: Heebo (Hebrew) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-
-  <!-- QR Code library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
@@ -27,8 +24,8 @@
 
     /* ===== FORM (not printed) ===== */
     #form-section {
-      max-width: 560px;
-      margin: 0 auto 32px;
+      max-width: 600px;
+      margin: 0 auto 18px;
       background: #fff;
       border-radius: 16px;
       padding: 24px 28px;
@@ -38,38 +35,37 @@
     #form-section h2 {
       text-align: center;
       color: #3d6b7a;
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 700;
-      margin-bottom: 20px;
-      letter-spacing: .5px;
+      margin-bottom: 18px;
     }
 
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px 20px;
+      gap: 12px 20px;
     }
 
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 4px;
     }
 
     .form-group.full { grid-column: 1 / -1; }
 
     label {
-      font-size: .82rem;
+      font-size: .8rem;
       font-weight: 600;
       color: #555;
     }
 
-    select, input[type="text"], input[type="date"] {
-      padding: 9px 12px;
+    select, input[type="text"], input[type="date"], input[type="email"], input[type="tel"] {
+      padding: 8px 11px;
       border: 1.5px solid #ccc;
       border-radius: 8px;
       font-family: 'Heebo', sans-serif;
-      font-size: .95rem;
+      font-size: .93rem;
       direction: rtl;
       color: #333;
       transition: border-color .2s;
@@ -80,33 +76,135 @@
       border-color: #3d6b7a;
     }
 
+    /* ===== BUTTON ROW ===== */
     .btn-row {
       display: flex;
-      gap: 12px;
-      margin-top: 20px;
+      gap: 10px;
+      margin-top: 18px;
       justify-content: center;
+      flex-wrap: wrap;
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      padding: 11px 22px;
+      gap: 6px;
+      padding: 10px 20px;
       border: none;
       border-radius: 10px;
       font-family: 'Heebo', sans-serif;
-      font-size: .95rem;
+      font-size: .92rem;
       font-weight: 700;
       cursor: pointer;
       transition: filter .2s, transform .1s;
       text-decoration: none;
     }
 
-    .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
     .btn:active { transform: translateY(0); }
 
+    .btn-save   { background: #5a8a6a; color: #fff; }
     .btn-print  { background: #3d6b7a; color: #fff; }
     .btn-wa     { background: #25d366; color: #fff; }
+
+    /* ===== LOG SECTION (not printed) ===== */
+    #log-section {
+      max-width: 600px;
+      margin: 0 auto 28px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.1);
+      overflow: hidden;
+    }
+
+    #log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 20px;
+      background: #f0f7fa;
+      border-bottom: 1px solid #ddeaf0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #log-header h3 {
+      font-size: 1rem;
+      color: #3d6b7a;
+      font-weight: 700;
+    }
+
+    #log-toggle-icon { font-size: 1rem; color: #3d6b7a; transition: transform .25s; }
+    #log-toggle-icon.open { transform: rotate(180deg); }
+
+    #log-body { display: none; padding: 14px 16px 16px; }
+    #log-body.visible { display: block; }
+
+    /* Filter row */
+    .log-filter-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .log-filter-row input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1.5px solid #ccc;
+      border-radius: 8px;
+      font-family: 'Heebo', sans-serif;
+      font-size: .88rem;
+      direction: rtl;
+    }
+
+    .btn-sm {
+      padding: 6px 14px;
+      font-size: .82rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 600;
+    }
+
+    .btn-clear-log { background: #f0e0e0; color: #a33; }
+    .btn-clear-log:hover { background: #f5c8c8; }
+
+    /* Log table */
+    .log-table-wrap { overflow-x: auto; }
+
+    table.log-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+      color: #333;
+    }
+
+    .log-table th {
+      background: #e8f3f8;
+      color: #3d6b7a;
+      font-weight: 700;
+      padding: 7px 10px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .log-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid #eee;
+      vertical-align: middle;
+    }
+
+    .log-table tr:last-child td { border-bottom: none; }
+    .log-table tr:hover td { background: #f5fafc; }
+
+    #log-empty {
+      text-align: center;
+      color: #999;
+      font-size: .88rem;
+      padding: 18px 0;
+    }
 
     /* ===== VOUCHER CARD ===== */
     #voucher {
@@ -117,11 +215,10 @@
       overflow: hidden;
       box-shadow: 0 8px 40px rgba(0,0,0,.18);
       position: relative;
-      /* fixed aspect ratio: roughly A5 landscape feel */
       min-height: 700px;
     }
 
-    /* ---- Corner ornaments (SVG swirls) ---- */
+    /* Corner ornaments */
     .ornament {
       position: absolute;
       width: 110px;
@@ -134,7 +231,7 @@
     .ornament-bl { bottom: 0; right: 0;   transform: scaleY(-1) scaleX(-1); }
     .ornament-br { bottom: 0; left: 0;    transform: scaleY(-1); }
 
-    /* ---- TOP CREAM SECTION ---- */
+    /* Top cream section */
     .voucher-top {
       background: #f5f0e8;
       text-align: center;
@@ -158,7 +255,6 @@
       margin-top: 3px;
     }
 
-    /* Oval photo */
     .photo-wrap {
       margin: 18px auto 0;
       width: 200px;
@@ -175,7 +271,6 @@
       object-fit: cover;
     }
 
-    /* Placeholder when no image */
     .photo-placeholder {
       width: 100%;
       height: 100%;
@@ -187,7 +282,6 @@
       font-size: 2.8rem;
     }
 
-    /* ---- DIVIDER ---- */
     .divider {
       text-align: center;
       font-size: 1.5rem;
@@ -198,26 +292,15 @@
       z-index: 1;
     }
 
-    /* ---- WAVE / TEAL SECTION ---- */
+    /* Wave / teal section */
     .voucher-wave {
       position: relative;
-      background: linear-gradient(
-        180deg,
-        #d6eaf2 0%,
-        #b8dce8 35%,
-        #8fc4d6 70%,
-        #6bafc5 100%
-      );
+      background: linear-gradient(180deg, #d6eaf2 0%, #b8dce8 35%, #8fc4d6 70%, #6bafc5 100%);
       padding: 0 28px 28px;
       z-index: 0;
     }
 
-    /* SVG wave at the top of the teal section */
-    .wave-svg {
-      display: block;
-      width: 100%;
-      margin-bottom: 14px;
-    }
+    .wave-svg { display: block; width: 100%; margin-bottom: 14px; }
 
     .big-headline {
       font-size: 1.65rem;
@@ -250,9 +333,8 @@
       padding: 10px 18px;
       margin-bottom: 14px;
     }
-
-    .contact-block .label  { font-weight: 700; color: #1c3d4a; font-size: .95rem; }
-    .contact-block .value  { font-size: 1.05rem; color: #0d2e3a; font-weight: 500; }
+    .contact-block .label { font-weight: 700; color: #1c3d4a; font-size: .95rem; }
+    .contact-block .value { font-size: 1.05rem; color: #0d2e3a; font-weight: 500; }
 
     .valid-block {
       text-align: center;
@@ -260,7 +342,6 @@
       color: #1c3d4a;
       margin-bottom: 18px;
     }
-
     .valid-block strong { font-weight: 700; }
     .valid-block #display-valid { font-weight: 900; color: #0d2e3a; }
 
@@ -278,37 +359,29 @@
       padding: 6px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,.15);
-      line-height: 0; /* remove extra space under canvas */
+      line-height: 0;
     }
-
-    #qr-code canvas, #qr-code img {
-      display: block;
-    }
+    #qr-code canvas, #qr-code img { display: block; }
 
     .voucher-meta {
       font-size: .78rem;
       color: #1c3d4a;
       text-align: center;
-      line-height: 1.7;
+      line-height: 1.8;
     }
-
     .voucher-meta span { display: block; }
     .voucher-meta .meta-id { font-weight: 700; font-size: .82rem; }
 
+    /* Sent timestamp on voucher */
+    #display-sent-row { display: none; font-size: .72rem; color: #1c3d4a; font-style: italic; }
+
     /* ===== PRINT ===== */
     @media print {
-      body {
-        background: none;
-        padding: 0;
-        margin: 0;
-      }
+      body { background: none; padding: 0; margin: 0; }
 
-      /* Hide everything except the voucher */
       #form-section,
-      .btn-row,
-      #action-buttons {
-        display: none !important;
-      }
+      #action-buttons,
+      #log-section { display: none !important; }
 
       #voucher {
         max-width: 100%;
@@ -319,10 +392,7 @@
         page-break-inside: avoid;
       }
 
-      /* Make wave section fill to bottom */
-      .voucher-wave {
-        min-height: 60vh;
-      }
+      .voucher-wave { min-height: 60vh; }
     }
 
     /* ===== RESPONSIVE ===== */
@@ -330,7 +400,6 @@
       .form-grid { grid-template-columns: 1fr; }
       .brand-title { font-size: 1.6rem; }
       .big-headline { font-size: 1.35rem; }
-      .btn-row { flex-direction: column; align-items: center; }
     }
   </style>
 </head>
@@ -360,42 +429,81 @@
     </div>
 
     <div class="form-group">
+      <label for="f-phone">טלפון המקבל</label>
+      <input type="tel" id="f-phone" placeholder="050-0000000" />
+    </div>
+
+    <div class="form-group full">
+      <label for="f-email">אימייל המקבל</label>
+      <input type="email" id="f-email" placeholder="example@email.com" dir="ltr" />
+    </div>
+
+    <div class="form-group">
       <label for="f-id">מספר שובר</label>
       <input type="text" id="f-id" placeholder="VCH-2026-001" />
     </div>
 
+    <div class="form-group">
+      <!-- spacer -->
+    </div>
+
   </div>
 
-  <!-- Action buttons inside form area -->
   <div class="btn-row" id="action-buttons">
+    <button class="btn btn-save"  onclick="saveVoucher()">💾 שמור</button>
     <button class="btn btn-print" onclick="window.print()">🖨️ הדפסה</button>
-    <a class="btn btn-wa" id="wa-link" href="#" target="_blank">💬 שתף בוואטסאפ</a>
+    <button class="btn btn-wa"    onclick="sendVoucher()">💬 שלח בוואטסאפ</button>
+  </div>
+</section>
+
+<!-- ===================== LOG SECTION (not printed) ===================== -->
+<section id="log-section">
+  <div id="log-header" onclick="toggleLog()">
+    <h3>📋 יומן שליחות (<span id="log-count">0</span>)</h3>
+    <span id="log-toggle-icon">▼</span>
+  </div>
+  <div id="log-body">
+    <div class="log-filter-row">
+      <input type="text" id="log-filter" placeholder="סנן לפי שם / טלפון / מספר שובר..." oninput="renderLog()" />
+      <button class="btn-sm btn-clear-log" onclick="clearLog()">מחק יומן</button>
+    </div>
+    <div class="log-table-wrap">
+      <div id="log-empty">אין שליחות עדיין</div>
+      <table class="log-table" id="log-table" style="display:none">
+        <thead>
+          <tr>
+            <th>מספר שובר</th>
+            <th>שם מקבל</th>
+            <th>טלפון</th>
+            <th>אימייל</th>
+            <th>סוג</th>
+            <th>תוקף</th>
+            <th>נשלח בתאריך</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+    </div>
   </div>
 </section>
 
 <!-- ===================== VOUCHER CARD ===================== -->
 <div id="voucher">
 
-  <!-- Corner ornaments (decorative SVG swirls) -->
-  <!-- Top-right -->
+  <!-- Corner ornaments -->
   <svg class="ornament ornament-tr" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
     <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
     <path d="M30 100 Q 30 30 100 30" stroke="#6a9db5" stroke-width="1.5" fill="none" opacity=".4"/>
-    <!-- Small spiral at corner -->
     <path d="M 8 8 Q 16 4 20 10 Q 24 18 16 22 Q 8 26 6 18 Q 4 10 12 8" stroke="#4a7e96" stroke-width="2" fill="none"/>
     <circle cx="8" cy="8" r="2.5" fill="#4a7e96"/>
-    <!-- Floral dots -->
     <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
     <circle cx="55" cy="12" r="1.5" fill="#8ab5c8" opacity=".5"/>
     <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
     <circle cx="12" cy="55" r="1.5" fill="#8ab5c8" opacity=".5"/>
-    <!-- Leaf shapes -->
     <path d="M25 20 Q 35 15 30 25" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
     <path d="M20 25 Q 15 35 25 30" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
   </svg>
-
-  <!-- Top-left (mirror of top-right) -->
   <svg class="ornament ornament-tl" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
     <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
@@ -409,8 +517,6 @@
     <path d="M25 20 Q 35 15 30 25" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
     <path d="M20 25 Q 15 35 25 30" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
   </svg>
-
-  <!-- Bottom-right -->
   <svg class="ornament ornament-br" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
     <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
@@ -420,8 +526,6 @@
     <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
     <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
   </svg>
-
-  <!-- Bottom-left -->
   <svg class="ornament ornament-bl" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
     <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
@@ -432,12 +536,10 @@
     <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
   </svg>
 
-  <!-- ---- TOP CREAM SECTION ---- -->
+  <!-- Top cream section -->
   <div class="voucher-top">
     <div class="brand-title">גלים ☯ ונפש</div>
     <div class="brand-subtitle">טיפולי וואטסו</div>
-
-    <!-- Oval pool photo — place pool.png in assets/ folder -->
     <div class="photo-wrap">
       <img src="assets/pool.png" alt="בריכת וואטסו"
            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
@@ -445,14 +547,12 @@
     </div>
   </div>
 
-  <!-- ---- WAVE DIVIDER ---- -->
-  <svg class="wave-svg" viewBox="0 0 620 48" preserveAspectRatio="none"
-       xmlns="http://www.w3.org/2000/svg">
-    <path d="M0 48 L0 24 Q 80 0 160 20 Q 240 40 310 18 Q 390 0 460 22 Q 540 44 620 16 L620 48 Z"
-          fill="#d6eaf2"/>
+  <!-- Wave divider -->
+  <svg class="wave-svg" viewBox="0 0 620 48" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0 48 L0 24 Q 80 0 160 20 Q 240 40 310 18 Q 390 0 460 22 Q 540 44 620 16 L620 48 Z" fill="#d6eaf2"/>
   </svg>
 
-  <!-- ---- TEAL WAVE SECTION ---- -->
+  <!-- Teal wave section -->
   <div class="voucher-wave">
 
     <div class="big-headline">איזה כיף קיבלת שובר מתנה!</div>
@@ -482,6 +582,8 @@
       <div class="voucher-meta">
         <span class="meta-id">מספר שובר: <span id="display-id">VCH-2026-001</span></span>
         <span>מקבל השובר: <span id="display-buyer">—</span></span>
+        <span>טלפון: <span id="display-phone">—</span></span>
+        <span id="display-sent-row">נשלח: <span id="display-sent">—</span></span>
       </div>
     </div>
 
@@ -491,21 +593,34 @@
 
 <!-- ===================== JAVASCRIPT ===================== -->
 <script>
+  // ── Storage keys ─────────────────────────────────────────
+  const LOG_KEY     = 'watsu_send_log';      // array of log entries
+  const SAVED_KEY   = 'watsu_saved_vouchers'; // object keyed by voucher_id
+
   // ── Helpers ──────────────────────────────────────────────
   function todayPlus6Months() {
     const d = new Date();
     d.setMonth(d.getMonth() + 6);
-    return d.toISOString().slice(0, 10); // YYYY-MM-DD for <input type=date>
+    return d.toISOString().slice(0, 10);
   }
 
   function isoToDisplay(isoDate) {
-    // Convert YYYY-MM-DD → DD/MM/YYYY
     if (!isoDate) return '';
     const [y, m, d] = isoDate.split('-');
     return `${d}/${m}/${y}`;
   }
 
-  // Auto-increment voucher ID counter (stored in localStorage)
+  // Format a JS Date to Israeli locale string
+  function formatDateTime(dt) {
+    if (!dt) return '';
+    const d = (dt instanceof Date) ? dt : new Date(dt);
+    return d.toLocaleString('he-IL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  // Auto-increment voucher ID (persisted in localStorage)
   function nextVoucherId() {
     const year = new Date().getFullYear();
     const key  = `voucher_counter_${year}`;
@@ -514,28 +629,41 @@
     return `VCH-${year}-${String(count).padStart(3, '0')}`;
   }
 
-  // ── QR code instance ────────────────────────────────────
-  let qrInstance = null;
-
-  function buildQRData() {
-    return JSON.stringify({
-      id:          document.getElementById('f-id').value.trim()    || document.getElementById('display-id').textContent,
+  // Read form values into an object
+  function getFormData() {
+    return {
+      id:          document.getElementById('f-id').value.trim(),
       type:        document.getElementById('f-type').value,
       valid_until: isoToDisplay(document.getElementById('f-valid').value),
-      buyer_name:  document.getElementById('f-buyer').value.trim()
-    });
+      buyer_name:  document.getElementById('f-buyer').value.trim(),
+      buyer_phone: document.getElementById('f-phone').value.trim(),
+      buyer_email: document.getElementById('f-email').value.trim()
+    };
   }
 
-  function refreshQR() {
+  // ── QR code ──────────────────────────────────────────────
+  let qrInstance = null;
+
+  // Build QR JSON data; sent_at is optional (only added when sending)
+  function buildQRData(sent_at) {
+    const d = getFormData();
+    const obj = {
+      id:          d.id || document.getElementById('display-id').textContent,
+      type:        d.type,
+      valid_until: d.valid_until,
+      buyer_name:  d.buyer_name,
+      buyer_phone: d.buyer_phone
+    };
+    if (sent_at) obj.sent_at = sent_at;
+    return JSON.stringify(obj);
+  }
+
+  function refreshQR(sent_at) {
     const container = document.getElementById('qr-code');
-    container.innerHTML = ''; // clear previous
-
-    if (qrInstance) {
-      qrInstance = null;
-    }
-
+    container.innerHTML = '';
+    qrInstance = null;
     qrInstance = new QRCode(container, {
-      text:         buildQRData(),
+      text:         buildQRData(sent_at),
       width:        110,
       height:       110,
       colorDark:    '#1c3d4a',
@@ -544,54 +672,158 @@
     });
   }
 
-  // ── WhatsApp link ────────────────────────────────────────
-  function refreshWA() {
-    const buyer  = document.getElementById('f-buyer').value.trim();
-    const type   = document.getElementById('f-type').value;
-    const valid  = isoToDisplay(document.getElementById('f-valid').value);
-    const vId    = document.getElementById('f-id').value.trim();
-
-    let msg = `קיבלת שובר מתנה לטיפול וואטסו! 🌊\n`;
-    if (buyer) msg += `שם: ${buyer}\n`;
-    msg += `סוג: ${type}\n`;
-    if (valid) msg += `תוקף עד: ${valid}\n`;
-    if (vId)   msg += `מספר שובר: ${vId}`;
-
-    const encoded = encodeURIComponent(msg);
-    document.getElementById('wa-link').href =
-      `https://wa.me/972504014696?text=${encoded}`;
+  // ── Live preview ─────────────────────────────────────────
+  function updatePreview() {
+    const d = getFormData();
+    document.getElementById('display-type').textContent  = d.type;
+    document.getElementById('display-valid').textContent = d.valid_until  || '—';
+    document.getElementById('display-buyer').textContent = d.buyer_name   || '—';
+    document.getElementById('display-phone').textContent = d.buyer_phone  || '—';
+    document.getElementById('display-id').textContent    = d.id           || 'VCH-2026-001';
+    // Reset sent row when form changes
+    document.getElementById('display-sent-row').style.display = 'none';
+    refreshQR(); // no sent_at in preview
   }
 
-  // ── Update voucher preview ────────────────────────────────
-  function updatePreview() {
-    const type  = document.getElementById('f-type').value;
-    const valid = isoToDisplay(document.getElementById('f-valid').value);
-    const buyer = document.getElementById('f-buyer').value.trim() || '—';
-    const vId   = document.getElementById('f-id').value.trim() || 'VCH-2026-001';
+  // ── Save voucher ─────────────────────────────────────────
+  function saveVoucher() {
+    const d = getFormData();
+    if (!d.id) { alert('נא להזין מספר שובר לפני השמירה'); return; }
 
-    document.getElementById('display-type').textContent  = type;
-    document.getElementById('display-valid').textContent = valid || '—';
-    document.getElementById('display-buyer').textContent = buyer;
-    document.getElementById('display-id').textContent    = vId;
+    const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || '{}');
+    saved[d.id] = { ...d, saved_at: new Date().toISOString() };
+    localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
 
-    refreshQR();
-    refreshWA();
+    // Visual feedback
+    const btn = document.querySelector('.btn-save');
+    const orig = btn.textContent;
+    btn.textContent = '✅ נשמר!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }
+
+  // ── Send via WhatsApp (force send — always opens WA) ─────
+  function sendVoucher() {
+    const d    = getFormData();
+    const now  = new Date();
+    const sentStr = now.toISOString(); // stored in log + QR
+
+    // 1. Update QR with sent timestamp
+    refreshQR(sentStr);
+
+    // 2. Show sent row on voucher
+    document.getElementById('display-sent').textContent    = formatDateTime(now);
+    document.getElementById('display-sent-row').style.display = 'block';
+
+    // 3. Build WA message
+    let msg = `קיבלת שובר מתנה לטיפול וואטסו! 🌊\n`;
+    if (d.buyer_name)  msg += `שם: ${d.buyer_name}\n`;
+    msg += `סוג: ${d.type}\n`;
+    if (d.valid_until) msg += `תוקף עד: ${d.valid_until}\n`;
+    if (d.id)          msg += `מספר שובר: ${d.id}`;
+
+    // 4. Add log entry
+    addLogEntry({
+      voucher_id:  d.id,
+      buyer_name:  d.buyer_name,
+      buyer_phone: d.buyer_phone,
+      buyer_email: d.buyer_email,
+      type:        d.type,
+      valid_until: d.valid_until,
+      sent_at:     sentStr
+    });
+
+    // 5. Open WA — force open regardless of whether phone is filled
+    //    If phone provided → send to that number; else → open WA for manual selection
+    const digits = d.buyer_phone.replace(/\D/g, '');
+    const target = digits.length >= 9 ? digits : '';
+    const url    = `https://wa.me/${target}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+
+  // ── Log management ────────────────────────────────────────
+  function getLog() {
+    return JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+  }
+
+  function saveLog(log) {
+    localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  }
+
+  function addLogEntry(entry) {
+    const log = getLog();
+    log.unshift(entry); // newest first
+    saveLog(log);
+    renderLog();
+  }
+
+  function clearLog() {
+    if (!confirm('למחוק את כל יומן השליחות?')) return;
+    localStorage.removeItem(LOG_KEY);
+    renderLog();
+  }
+
+  function toggleLog() {
+    const body = document.getElementById('log-body');
+    const icon = document.getElementById('log-toggle-icon');
+    const open = body.classList.toggle('visible');
+    icon.classList.toggle('open', open);
+  }
+
+  function renderLog() {
+    const log    = getLog();
+    const filter = document.getElementById('log-filter').value.trim().toLowerCase();
+    const tbody  = document.getElementById('log-tbody');
+    const empty  = document.getElementById('log-empty');
+    const table  = document.getElementById('log-table');
+
+    // Update count badge
+    document.getElementById('log-count').textContent = log.length;
+
+    // Filter
+    const filtered = filter
+      ? log.filter(e =>
+          (e.voucher_id  || '').toLowerCase().includes(filter) ||
+          (e.buyer_name  || '').toLowerCase().includes(filter) ||
+          (e.buyer_phone || '').toLowerCase().includes(filter) ||
+          (e.buyer_email || '').toLowerCase().includes(filter)
+        )
+      : log;
+
+    if (filtered.length === 0) {
+      empty.style.display = 'block';
+      table.style.display = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = filtered.map(e => `
+      <tr>
+        <td>${e.voucher_id  || '—'}</td>
+        <td>${e.buyer_name  || '—'}</td>
+        <td>${e.buyer_phone || '—'}</td>
+        <td style="direction:ltr;text-align:left">${e.buyer_email || '—'}</td>
+        <td>${e.type        || '—'}</td>
+        <td>${e.valid_until || '—'}</td>
+        <td style="white-space:nowrap">${formatDateTime(e.sent_at)}</td>
+      </tr>
+    `).join('');
   }
 
   // ── Init ─────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
-    // Set defaults
     document.getElementById('f-valid').value = todayPlus6Months();
     document.getElementById('f-id').value    = nextVoucherId();
 
-    // Attach live-update listeners
-    ['f-type', 'f-valid', 'f-buyer', 'f-id'].forEach(id => {
-      document.getElementById(id).addEventListener('input', updatePreview);
+    // Attach live-update listeners to all form fields
+    ['f-type', 'f-valid', 'f-buyer', 'f-phone', 'f-email', 'f-id'].forEach(id => {
+      document.getElementById(id).addEventListener('input',  updatePreview);
       document.getElementById(id).addEventListener('change', updatePreview);
     });
 
-    // Initial render
     updatePreview();
+    renderLog();
   });
 </script>
 
