@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>שובר מתנה — גלים ונפש</title>
+
+  <!-- Google Font: Heebo (Hebrew) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+
+  <!-- QR Code library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    /* ===== GLOBAL ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Heebo', sans-serif;
+      background: #e8e0d0;
+      direction: rtl;
+      min-height: 100vh;
+      padding: 30px 16px 60px;
+    }
+
+    /* ===== FORM (not printed) ===== */
+    #form-section {
+      max-width: 560px;
+      margin: 0 auto 32px;
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px 28px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.12);
+    }
+
+    #form-section h2 {
+      text-align: center;
+      color: #3d6b7a;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      letter-spacing: .5px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: .82rem;
+      font-weight: 600;
+      color: #555;
+    }
+
+    select, input[type="text"], input[type="date"] {
+      padding: 9px 12px;
+      border: 1.5px solid #ccc;
+      border-radius: 8px;
+      font-family: 'Heebo', sans-serif;
+      font-size: .95rem;
+      direction: rtl;
+      color: #333;
+      transition: border-color .2s;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #3d6b7a;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      justify-content: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 22px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Heebo', sans-serif;
+      font-size: .95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter .2s, transform .1s;
+      text-decoration: none;
+    }
+
+    .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-print  { background: #3d6b7a; color: #fff; }
+    .btn-wa     { background: #25d366; color: #fff; }
+
+    /* ===== VOUCHER CARD ===== */
+    #voucher {
+      max-width: 620px;
+      margin: 0 auto;
+      background: #f5f0e8;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,.18);
+      position: relative;
+      /* fixed aspect ratio: roughly A5 landscape feel */
+      min-height: 700px;
+    }
+
+    /* ---- Corner ornaments (SVG swirls) ---- */
+    .ornament {
+      position: absolute;
+      width: 110px;
+      height: 110px;
+      opacity: .55;
+      pointer-events: none;
+    }
+    .ornament-tl { top: 0;    right: 0;   transform: scaleX(-1); }
+    .ornament-tr { top: 0;    left: 0; }
+    .ornament-bl { bottom: 0; right: 0;   transform: scaleY(-1) scaleX(-1); }
+    .ornament-br { bottom: 0; left: 0;    transform: scaleY(-1); }
+
+    /* ---- TOP CREAM SECTION ---- */
+    .voucher-top {
+      background: #f5f0e8;
+      text-align: center;
+      padding: 30px 20px 22px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-title {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #3d6b7a;
+      letter-spacing: 1px;
+      line-height: 1.15;
+    }
+
+    .brand-subtitle {
+      font-size: 1.05rem;
+      font-style: italic;
+      color: #5a8fa0;
+      margin-top: 3px;
+    }
+
+    /* Oval photo */
+    .photo-wrap {
+      margin: 18px auto 0;
+      width: 200px;
+      height: 140px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 4px solid #b0cdd8;
+      box-shadow: 0 4px 16px rgba(61,107,122,.25);
+    }
+
+    .photo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Placeholder when no image */
+    .photo-placeholder {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #7fb8cb 0%, #3d8fa8 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 2.8rem;
+    }
+
+    /* ---- DIVIDER ---- */
+    .divider {
+      text-align: center;
+      font-size: 1.5rem;
+      color: #3d6b7a;
+      margin: 12px 0 8px;
+      letter-spacing: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ---- WAVE / TEAL SECTION ---- */
+    .voucher-wave {
+      position: relative;
+      background: linear-gradient(
+        180deg,
+        #d6eaf2 0%,
+        #b8dce8 35%,
+        #8fc4d6 70%,
+        #6bafc5 100%
+      );
+      padding: 0 28px 28px;
+      z-index: 0;
+    }
+
+    /* SVG wave at the top of the teal section */
+    .wave-svg {
+      display: block;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .big-headline {
+      font-size: 1.65rem;
+      font-weight: 900;
+      color: #1c4a5a;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .voucher-type-line {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #1c4a5a;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .body-text {
+      font-size: .95rem;
+      color: #1c3d4a;
+      line-height: 1.8;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .contact-block {
+      text-align: center;
+      background: rgba(255,255,255,.35);
+      border-radius: 12px;
+      padding: 10px 18px;
+      margin-bottom: 14px;
+    }
+
+    .contact-block .label  { font-weight: 700; color: #1c3d4a; font-size: .95rem; }
+    .contact-block .value  { font-size: 1.05rem; color: #0d2e3a; font-weight: 500; }
+
+    .valid-block {
+      text-align: center;
+      font-size: 1rem;
+      color: #1c3d4a;
+      margin-bottom: 18px;
+    }
+
+    .valid-block strong { font-weight: 700; }
+    .valid-block #display-valid { font-weight: 900; color: #0d2e3a; }
+
+    /* QR + meta */
+    .qr-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    #qr-code {
+      background: #fff;
+      padding: 6px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      line-height: 0; /* remove extra space under canvas */
+    }
+
+    #qr-code canvas, #qr-code img {
+      display: block;
+    }
+
+    .voucher-meta {
+      font-size: .78rem;
+      color: #1c3d4a;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    .voucher-meta span { display: block; }
+    .voucher-meta .meta-id { font-weight: 700; font-size: .82rem; }
+
+    /* ===== PRINT ===== */
+    @media print {
+      body {
+        background: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      /* Hide everything except the voucher */
+      #form-section,
+      .btn-row,
+      #action-buttons {
+        display: none !important;
+      }
+
+      #voucher {
+        max-width: 100%;
+        width: 100%;
+        box-shadow: none;
+        border-radius: 0;
+        min-height: 100vh;
+        page-break-inside: avoid;
+      }
+
+      /* Make wave section fill to bottom */
+      .voucher-wave {
+        min-height: 60vh;
+      }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 480px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .brand-title { font-size: 1.6rem; }
+      .big-headline { font-size: 1.35rem; }
+      .btn-row { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===================== FORM (not printed) ===================== -->
+<section id="form-section">
+  <h2>✏️ פרטי שובר מתנה</h2>
+  <div class="form-grid">
+
+    <div class="form-group">
+      <label for="f-type">סוג טיפול</label>
+      <select id="f-type">
+        <option value="ליחיד">ליחיד</option>
+        <option value="לזוג">לזוג</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="f-valid">תוקף עד</label>
+      <input type="date" id="f-valid" />
+    </div>
+
+    <div class="form-group">
+      <label for="f-buyer">שם המקבל</label>
+      <input type="text" id="f-buyer" placeholder="שם פרטי ומשפחה" />
+    </div>
+
+    <div class="form-group">
+      <label for="f-id">מספר שובר</label>
+      <input type="text" id="f-id" placeholder="VCH-2026-001" />
+    </div>
+
+  </div>
+
+  <!-- Action buttons inside form area -->
+  <div class="btn-row" id="action-buttons">
+    <button class="btn btn-print" onclick="window.print()">🖨️ הדפסה</button>
+    <a class="btn btn-wa" id="wa-link" href="#" target="_blank">💬 שתף בוואטסאפ</a>
+  </div>
+</section>
+
+<!-- ===================== VOUCHER CARD ===================== -->
+<div id="voucher">
+
+  <!-- Corner ornaments (decorative SVG swirls) -->
+  <!-- Top-right -->
+  <svg class="ornament ornament-tr" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
+    <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
+    <path d="M30 100 Q 30 30 100 30" stroke="#6a9db5" stroke-width="1.5" fill="none" opacity=".4"/>
+    <!-- Small spiral at corner -->
+    <path d="M 8 8 Q 16 4 20 10 Q 24 18 16 22 Q 8 26 6 18 Q 4 10 12 8" stroke="#4a7e96" stroke-width="2" fill="none"/>
+    <circle cx="8" cy="8" r="2.5" fill="#4a7e96"/>
+    <!-- Floral dots -->
+    <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="55" cy="12" r="1.5" fill="#8ab5c8" opacity=".5"/>
+    <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="12" cy="55" r="1.5" fill="#8ab5c8" opacity=".5"/>
+    <!-- Leaf shapes -->
+    <path d="M25 20 Q 35 15 30 25" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
+    <path d="M20 25 Q 15 35 25 30" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
+  </svg>
+
+  <!-- Top-left (mirror of top-right) -->
+  <svg class="ornament ornament-tl" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
+    <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
+    <path d="M30 100 Q 30 30 100 30" stroke="#6a9db5" stroke-width="1.5" fill="none" opacity=".4"/>
+    <path d="M 8 8 Q 16 4 20 10 Q 24 18 16 22 Q 8 26 6 18 Q 4 10 12 8" stroke="#4a7e96" stroke-width="2" fill="none"/>
+    <circle cx="8" cy="8" r="2.5" fill="#4a7e96"/>
+    <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="55" cy="12" r="1.5" fill="#8ab5c8" opacity=".5"/>
+    <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="12" cy="55" r="1.5" fill="#8ab5c8" opacity=".5"/>
+    <path d="M25 20 Q 35 15 30 25" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
+    <path d="M20 25 Q 15 35 25 30" stroke="#6aaa8d" stroke-width="1.5" fill="#b8dcc8" opacity=".5"/>
+  </svg>
+
+  <!-- Bottom-right -->
+  <svg class="ornament ornament-br" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
+    <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
+    <path d="M30 100 Q 30 30 100 30" stroke="#6a9db5" stroke-width="1.5" fill="none" opacity=".4"/>
+    <path d="M 8 8 Q 16 4 20 10 Q 24 18 16 22 Q 8 26 6 18 Q 4 10 12 8" stroke="#4a7e96" stroke-width="2" fill="none"/>
+    <circle cx="8" cy="8" r="2.5" fill="#4a7e96"/>
+    <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
+  </svg>
+
+  <!-- Bottom-left -->
+  <svg class="ornament ornament-bl" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 100 Q 10 10 100 10" stroke="#6a9db5" stroke-width="3" fill="none"/>
+    <path d="M20 100 Q 20 20 100 20" stroke="#6a9db5" stroke-width="2" fill="none" opacity=".6"/>
+    <path d="M30 100 Q 30 30 100 30" stroke="#6a9db5" stroke-width="1.5" fill="none" opacity=".4"/>
+    <path d="M 8 8 Q 16 4 20 10 Q 24 18 16 22 Q 8 26 6 18 Q 4 10 12 8" stroke="#4a7e96" stroke-width="2" fill="none"/>
+    <circle cx="8" cy="8" r="2.5" fill="#4a7e96"/>
+    <circle cx="40" cy="15" r="2" fill="#8ab5c8" opacity=".7"/>
+    <circle cx="15" cy="40" r="2" fill="#8ab5c8" opacity=".7"/>
+  </svg>
+
+  <!-- ---- TOP CREAM SECTION ---- -->
+  <div class="voucher-top">
+    <div class="brand-title">גלים ☯ ונפש</div>
+    <div class="brand-subtitle">טיפולי וואטסו</div>
+
+    <!-- Oval pool photo — place pool.png in assets/ folder -->
+    <div class="photo-wrap">
+      <img src="assets/pool.png" alt="בריכת וואטסו"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+      <div class="photo-placeholder" style="display:none;">🌊</div>
+    </div>
+  </div>
+
+  <!-- ---- WAVE DIVIDER ---- -->
+  <svg class="wave-svg" viewBox="0 0 620 48" preserveAspectRatio="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <path d="M0 48 L0 24 Q 80 0 160 20 Q 240 40 310 18 Q 390 0 460 22 Q 540 44 620 16 L620 48 Z"
+          fill="#d6eaf2"/>
+  </svg>
+
+  <!-- ---- TEAL WAVE SECTION ---- -->
+  <div class="voucher-wave">
+
+    <div class="big-headline">איזה כיף קיבלת שובר מתנה!</div>
+    <div class="voucher-type-line">טיפול וואטסו <span id="display-type">ליחיד</span></div>
+
+    <div class="divider">☯</div>
+
+    <div class="body-text">
+      וואטסו במים בבריכה חמימה בחצר מקורה ושקטה.<br />
+      מומלץ לבוא בבגד ים, להביא מגבות ובגדים להחלפה.<br />
+      הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים.
+    </div>
+
+    <div class="contact-block">
+      <div class="label">למימוש ותיאום תאריך:</div>
+      <div class="value">אביגל: 050-4014696</div>
+    </div>
+
+    <div class="valid-block">
+      <strong>השובר בתוקף עד: </strong>
+      <span id="display-valid">01/12/2026</span>
+    </div>
+
+    <!-- QR + meta -->
+    <div class="qr-row">
+      <div id="qr-code"></div>
+      <div class="voucher-meta">
+        <span class="meta-id">מספר שובר: <span id="display-id">VCH-2026-001</span></span>
+        <span>מקבל השובר: <span id="display-buyer">—</span></span>
+      </div>
+    </div>
+
+  </div><!-- .voucher-wave -->
+</div><!-- #voucher -->
+
+
+<!-- ===================== JAVASCRIPT ===================== -->
+<script>
+  // ── Helpers ──────────────────────────────────────────────
+  function todayPlus6Months() {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD for <input type=date>
+  }
+
+  function isoToDisplay(isoDate) {
+    // Convert YYYY-MM-DD → DD/MM/YYYY
+    if (!isoDate) return '';
+    const [y, m, d] = isoDate.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  // Auto-increment voucher ID counter (stored in localStorage)
+  function nextVoucherId() {
+    const year = new Date().getFullYear();
+    const key  = `voucher_counter_${year}`;
+    let count  = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+    localStorage.setItem(key, count);
+    return `VCH-${year}-${String(count).padStart(3, '0')}`;
+  }
+
+  // ── QR code instance ────────────────────────────────────
+  let qrInstance = null;
+
+  function buildQRData() {
+    return JSON.stringify({
+      id:          document.getElementById('f-id').value.trim()    || document.getElementById('display-id').textContent,
+      type:        document.getElementById('f-type').value,
+      valid_until: isoToDisplay(document.getElementById('f-valid').value),
+      buyer_name:  document.getElementById('f-buyer').value.trim()
+    });
+  }
+
+  function refreshQR() {
+    const container = document.getElementById('qr-code');
+    container.innerHTML = ''; // clear previous
+
+    if (qrInstance) {
+      qrInstance = null;
+    }
+
+    qrInstance = new QRCode(container, {
+      text:         buildQRData(),
+      width:        110,
+      height:       110,
+      colorDark:    '#1c3d4a',
+      colorLight:   '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
+
+  // ── WhatsApp link ────────────────────────────────────────
+  function refreshWA() {
+    const buyer  = document.getElementById('f-buyer').value.trim();
+    const type   = document.getElementById('f-type').value;
+    const valid  = isoToDisplay(document.getElementById('f-valid').value);
+    const vId    = document.getElementById('f-id').value.trim();
+
+    let msg = `קיבלת שובר מתנה לטיפול וואטסו! 🌊\n`;
+    if (buyer) msg += `שם: ${buyer}\n`;
+    msg += `סוג: ${type}\n`;
+    if (valid) msg += `תוקף עד: ${valid}\n`;
+    if (vId)   msg += `מספר שובר: ${vId}`;
+
+    const encoded = encodeURIComponent(msg);
+    document.getElementById('wa-link').href =
+      `https://wa.me/972504014696?text=${encoded}`;
+  }
+
+  // ── Update voucher preview ────────────────────────────────
+  function updatePreview() {
+    const type  = document.getElementById('f-type').value;
+    const valid = isoToDisplay(document.getElementById('f-valid').value);
+    const buyer = document.getElementById('f-buyer').value.trim() || '—';
+    const vId   = document.getElementById('f-id').value.trim() || 'VCH-2026-001';
+
+    document.getElementById('display-type').textContent  = type;
+    document.getElementById('display-valid').textContent = valid || '—';
+    document.getElementById('display-buyer').textContent = buyer;
+    document.getElementById('display-id').textContent    = vId;
+
+    refreshQR();
+    refreshWA();
+  }
+
+  // ── Init ─────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    // Set defaults
+    document.getElementById('f-valid').value = todayPlus6Months();
+    document.getElementById('f-id').value    = nextVoucherId();
+
+    // Attach live-update listeners
+    ['f-type', 'f-valid', 'f-buyer', 'f-id'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updatePreview);
+      document.getElementById(id).addEventListener('change', updatePreview);
+    });
+
+    // Initial render
+    updatePreview();
+  });
+</script>
+
+</body>
+</html>
