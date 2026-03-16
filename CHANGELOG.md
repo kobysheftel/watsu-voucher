@@ -2,6 +2,12 @@
 
 ## [Unreleased — V1 in progress]
 
+| Date | Discipline | Item | Old | New | Why | Revert |
+|---|---|---|---|---|---|---|
+| 2026-03-16 | BACKEND | PDF library | WeasyPrint | xhtml2pdf 0.2.17 | Windows compat, no GTK | pip install WeasyPrint |
+| 2026-03-17 | LANGUAGE | Python | 3.12 (planned) | 3.14.3 (installed) | Only version on machine | install py 3.12 from python.org |
+| 2026-03-17 | LIBS | Pillow | ==11.0.0 | >=11.1.0 (12.1.1) | No 3.14 wheel for 11.0.0 | pin to ==11.0.0 on Python 3.12 |
+
 ### 2026-03-16 — Step 1: Project Structure
 - Created full project folder structure
 - requirements.txt with all dependencies

@@ -1,30 +1,31 @@
 # Watsu Gift Voucher System — V1 Dependencies
-# Python 3.12
+# Python 3.14 (3.12+ compatible)
+# Note: using minimum version pins (>=) to allow pip to find 3.14-compatible wheels
 
 # Web framework
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
+fastapi>=0.115.6
+uvicorn[standard]>=0.32.1
 
 # Database
-sqlalchemy==2.0.36
+sqlalchemy>=2.0.36
 
 # Templates
-jinja2==3.1.4
+jinja2>=3.1.4
 
 # Form data parsing (required by FastAPI for HTML forms)
-python-multipart==0.0.12
+python-multipart>=0.0.12
 
 # PDF generation (Windows-compatible, no GTK needed)
-xhtml2pdf==0.2.16
+xhtml2pdf>=0.2.16
 
-# QR code generation (includes Pillow)
-qrcode[pil]==8.0
+# QR code generation
+qrcode>=8.0
 
-# Image handling
-Pillow==11.0.0
+# Image handling (Pillow — use latest for Python 3.14 support)
+Pillow>=11.1.0
 
 # QR encryption
-cryptography==43.0.3
+cryptography>=43.0.3
 
 # Static file serving
-aiofiles==24.1.0
+aiofiles>=24.1.0
