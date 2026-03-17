@@ -19,7 +19,7 @@
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
           <div>
             <h3 class="mb-1">{{ holder.name }}</h3>
-            <div class="text-muted fw-bold">{{ holder.mobile }}</div>
+            <div class="fw-bold text-muted">{{ holder.mobile }}</div>
             {% if holder.email %}
             <div class="text-muted small mt-1">{{ holder.email }}</div>
             {% endif %}
@@ -71,18 +71,13 @@
   <table class="table table-hover mb-0">
     <thead class="table-light">
       <tr>
-        <th>מס׳ שובר</th>
-        <th>סוג</th>
-        <th>סטטוס</th>
-        <th>תוקף עד</th>
-        <th>מס׳ קבלה</th>
-        <th>הונפק</th>
+        <th>מס׳ שובר</th><th>סוג</th><th>סטטוס</th>
+        <th>תוקף עד</th><th>מס׳ קבלה</th><th>הונפק</th><th></th>
       </tr>
     </thead>
     <tbody>
       {% for v in vouchers %}
-      <tr class="clickable-row"
-          onclick="location.href='/vouchers/{{ v.voucher_id }}/view'">
+      <tr>
         <td class="font-monospace small">{{ v.voucher_id }}</td>
         <td>{{ v.voucher_type }}</td>
         <td>
@@ -93,6 +88,10 @@
         <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
         <td>{{ v.receipt_number or '—' }}</td>
         <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
+        <td>
+          <a href="/vouchers/{{ v.voucher_id }}/view"
+             class="btn btn-outline-primary btn-sm">פתח</a>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -110,7 +109,7 @@
 {% endif %}
 
 
-<!-- ── Edit Holder Modal ──────────────────────────────────────── -->
+<!-- ── Edit Holder Modal ──────────────────────────────────────────────────── -->
 {% if can_edit %}
 <div class="modal fade" id="editModal" tabindex="-1">
   <div class="modal-dialog">
@@ -119,30 +118,31 @@
         <h5 class="modal-title">עריכת פרטי מחזיק</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">שם מלא</label>
-          <input type="text" class="form-control" id="edit-name"
-                 value="{{ holder.name }}"/>
+      <form method="post" action="/form/holders/{{ holder.mobile }}/edit">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">שם מלא</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ holder.name }}"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">אימייל</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ holder.email or '' }}"/>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">אימייל</label>
-          <input type="email" class="form-control" id="edit-email"
-                 value="{{ holder.email or '' }}"/>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">שמור</button>
         </div>
-        <div id="edit-error" class="text-danger small" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-        <button class="btn btn-primary" onclick="saveHolder()">שמור</button>
-      </div>
+      </form>
     </div>
   </div>
 </div>
 {% endif %}
 
 
-<!-- ── New Voucher Modal ──────────────────────────────────────── -->
+<!-- ── New Voucher Modal ──────────────────────────────────────────────────── -->
 <div class="modal fade" id="newVoucherModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -150,117 +150,41 @@
         <h5 class="modal-title">שובר חדש — {{ holder.name }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">סוג שובר *</label>
-          <select class="form-select" id="vtype">
-            <option value="ליחיד">ליחיד</option>
-            <option value="לזוג">לזוג</option>
-          </select>
+      <form method="post" action="/form/vouchers/new">
+        <!-- Hidden: tells Python which holder this voucher belongs to -->
+        <input type="hidden" name="mobile" value="{{ holder.mobile }}"/>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">סוג שובר *</label>
+            <select name="voucher_type" class="form-select" required>
+              <option value="ליחיד">ליחיד</option>
+              <option value="לזוג">לזוג</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">תוקף עד *</label>
+            <input type="date" name="valid_until" class="form-control" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">מספר קבלה</label>
+            <input type="text" name="receipt_number" class="form-control"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">תאריך קבלה</label>
+            <input type="date" name="receipt_date" class="form-control"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">הערות</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">תוקף עד *</label>
-          <input type="date" class="form-control" id="valid-until"/>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">צור שובר</button>
         </div>
-        <div class="mb-3">
-          <label class="form-label">מספר קבלה</label>
-          <input type="text" class="form-control" id="receipt-number"/>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">תאריך קבלה</label>
-          <input type="date" class="form-control" id="receipt-date"/>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">הערות</label>
-          <textarea class="form-control" id="v-notes" rows="2"></textarea>
-        </div>
-        <div id="v-error" class="text-danger small" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-        <button class="btn btn-primary" id="v-save-btn" onclick="createVoucher()">
-          צור שובר
-        </button>
-      </div>
+      </form>
     </div>
   </div>
 </div>
 
-{% endblock %}
-
-
-{% block extra_js %}
-<script>
-const holderMobile = "{{ holder.mobile }}";
-
-/* ── Save edited holder ── */
-async function saveHolder() {
-  const name  = document.getElementById('edit-name').value.trim();
-  const email = document.getElementById('edit-email').value.trim();
-  const errEl = document.getElementById('edit-error');
-  errEl.style.display = 'none';
-
-  const res  = await fetch('/holders/' + holderMobile, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name || null, email: email || null }),
-  });
-  const data = await res.json();
-
-  if (!res.ok) {
-    errEl.textContent = data.detail || 'שגיאה';
-    errEl.style.display = '';
-    return;
-  }
-  showToast('הפרטים עודכנו');
-  setTimeout(() => location.reload(), 1000);
-}
-
-/* ── Create new voucher ── */
-async function createVoucher() {
-  const voucher_type   = document.getElementById('vtype').value;
-  const valid_until    = document.getElementById('valid-until').value;
-  const receipt_number = document.getElementById('receipt-number').value.trim();
-  const receipt_date   = document.getElementById('receipt-date').value;
-  const notes          = document.getElementById('v-notes').value.trim();
-  const errEl          = document.getElementById('v-error');
-
-  errEl.style.display = 'none';
-  if (!valid_until) {
-    errEl.textContent = 'נא לבחור תאריך תוקף';
-    errEl.style.display = '';
-    return;
-  }
-
-  const btn = document.getElementById('v-save-btn');
-  btn.disabled = true;
-  btn.textContent = 'יוצר…';
-
-  try {
-    const res  = await fetch('/vouchers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mobile: holderMobile,
-        voucher_type,
-        valid_until,
-        receipt_number: receipt_number || null,
-        receipt_date: receipt_date || null,
-        notes: notes || null,
-      }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      errEl.textContent = data.detail || 'שגיאה';
-      errEl.style.display = '';
-      return;
-    }
-    location.href = '/vouchers/' + data.voucher_id + '/view';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'צור שובר';
-  }
-}
-</script>
 {% endblock %}

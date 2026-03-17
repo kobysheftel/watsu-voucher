@@ -18,7 +18,7 @@
 
 <div class="row g-4">
 
-  <!-- ── Left column: voucher details ──────────────────────────── -->
+  <!-- ── Left column: voucher info ──────────────────────────────────────── -->
   <div class="col-md-7">
 
     <!-- Main voucher card -->
@@ -51,7 +51,7 @@
       </div>
     </div>
 
-    <!-- Holder info -->
+    <!-- Holder snapshot -->
     <div class="card shadow-sm mb-3">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>פרטי מקבל</span>
@@ -78,51 +78,48 @@
           <div class="col-8 small">{{ d_email }}</div>
         </div>
         {% endif %}
-
         {% if holder %}
         <div class="mt-2">
           <a href="/holders/{{ holder.mobile }}/view"
-             class="btn btn-outline-secondary btn-sm">
-            לדף המחזיק ←
-          </a>
+             class="btn btn-outline-secondary btn-sm">לדף המחזיק ←</a>
         </div>
         {% endif %}
       </div>
     </div>
 
-    <!-- Receipt / Notes (editable until used) -->
+    <!-- Receipt / Notes form (POST to Python) -->
     <div class="card shadow-sm mb-3">
       <div class="card-header">פרטי קבלה / הערות</div>
       <div class="card-body">
-        <div class="mb-2">
-          <label class="form-label small text-muted mb-1">מספר קבלה</label>
-          <input type="text" class="form-control form-control-sm" id="receipt-number"
-                 value="{{ voucher.receipt_number or '' }}"
-                 {% if voucher.is_frozen %}readonly{% endif %}/>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small text-muted mb-1">תאריך קבלה</label>
-          <input type="date" class="form-control form-control-sm" id="receipt-date"
-                 value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
-                 {% if voucher.is_frozen %}readonly{% endif %}/>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small text-muted mb-1">הערות</label>
-          <textarea class="form-control form-control-sm" id="v-notes" rows="2"
-                    {% if voucher.is_frozen %}readonly{% endif %}>{{ voucher.notes or '' }}</textarea>
-        </div>
-        {% if not voucher.is_frozen %}
-        <button class="btn btn-outline-primary btn-sm" onclick="saveNotes()">
-          💾 שמור הערות
-        </button>
-        {% endif %}
+        <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/notes">
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-1">מספר קבלה</label>
+            <input type="text" name="receipt_number" class="form-control form-control-sm"
+                   value="{{ voucher.receipt_number or '' }}"
+                   {% if voucher.is_frozen %}readonly{% endif %}/>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-1">תאריך קבלה</label>
+            <input type="date" name="receipt_date" class="form-control form-control-sm"
+                   value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
+                   {% if voucher.is_frozen %}readonly{% endif %}/>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small text-muted mb-1">הערות</label>
+            <textarea name="notes" class="form-control form-control-sm" rows="2"
+                      {% if voucher.is_frozen %}readonly{% endif %}>{{ voucher.notes or '' }}</textarea>
+          </div>
+          {% if not voucher.is_frozen %}
+          <button type="submit" class="btn btn-outline-primary btn-sm">💾 שמור הערות</button>
+          {% endif %}
+        </form>
       </div>
     </div>
 
   </div><!-- /left col -->
 
 
-  <!-- ── Right column: actions + QR + history ──────────────────── -->
+  <!-- ── Right column: actions + QR + history ───────────────────────────── -->
   <div class="col-md-5">
 
     <!-- Action buttons -->
@@ -131,17 +128,21 @@
       <div class="card-body d-grid gap-2">
 
         {% if voucher.status == 'draft' %}
+          <!-- First send: opens modal with form -->
           <button class="btn btn-primary"
                   data-bs-toggle="modal" data-bs-target="#sendModal">
             📤 שלח שובר ראשון
           </button>
 
         {% elif voucher.status == 'sent' %}
+          <!-- Resend: same modal, same form -->
           <button class="btn btn-outline-primary"
                   data-bs-toggle="modal" data-bs-target="#sendModal">
             🔄 שלח מחדש
           </button>
-          <button class="btn btn-success" onclick="markUsed()">
+          <!-- Mark used: direct form POST, no JavaScript needed -->
+          <button class="btn btn-success"
+                  data-bs-toggle="modal" data-bs-target="#useModal">
             ✅ סמן כמומש
           </button>
 
@@ -151,16 +152,16 @@
           </div>
         {% endif %}
 
-        <!-- WhatsApp link (shown when cemented mobile exists) -->
+        <!-- WhatsApp link -->
         {% set wa_num = voucher.holder_mobile or (holder.mobile if holder else None) %}
-        {% if wa_num and voucher.status in ['sent','used'] %}
+        {% if wa_num and voucher.status in ['sent', 'used'] %}
         <a href="https://wa.me/972{{ wa_num[1:] }}" target="_blank"
            class="btn btn-outline-success btn-sm">
           📱 פתח ווטסאפ
         </a>
         {% endif %}
 
-        <!-- PDF download (when PDF exists) -->
+        <!-- PDF download -->
         {% if voucher.pdf_path %}
         <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
            class="btn btn-outline-secondary btn-sm">
@@ -177,7 +178,7 @@
       <div class="card-header">קוד QR</div>
       <div class="card-body">
         <img src="/vouchers/{{ voucher.voucher_id }}/qr"
-             class="img-fluid" style="max-width:160px;"/>
+             class="img-fluid" style="max-width:160px;" alt="QR"/>
       </div>
     </div>
     {% endif %}
@@ -206,7 +207,7 @@
 </div><!-- /row -->
 
 
-<!-- ── Send / Resend Modal ──────────────────────────────────────── -->
+<!-- ── Send / Resend Modal ──────────────────────────────────────────────────── -->
 {% if voucher.status in ['draft', 'sent'] %}
 <div class="modal fade" id="sendModal" tabindex="-1">
   <div class="modal-dialog">
@@ -217,102 +218,56 @@
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
+      <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">אמצעי שליחה *</label>
+            <select name="sent_via" class="form-select" required>
+              <option value="WA">📱 וואטסאפ</option>
+              <option value="EMAIL">📧 מייל</option>
+              <option value="PRINT">🖨️ הדפסה</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">הערה (אופציונלי)</label>
+            <input type="text" name="note" class="form-control"/>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">שלח</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ── Mark Used Confirmation Modal ─────────────────────────────────────────── -->
+{% if voucher.status == 'sent' %}
+<div class="modal fade" id="useModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">אישור מימוש שובר</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
       <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">אמצעי שליחה *</label>
-          <select class="form-select" id="sent-via">
-            <option value="WA">📱 וואטסאפ</option>
-            <option value="EMAIL">📧 מייל</option>
-            <option value="PRINT">🖨️ הדפסה</option>
-          </select>
+        <div class="alert alert-warning mb-0">
+          ⚠️ פעולה זו בלתי הפיכה — השובר יוקפא לצמיתות ולא ניתן יהיה לשלוח אותו מחדש.
         </div>
-        <div class="mb-3">
-          <label class="form-label">הערה (אופציונלי)</label>
-          <input type="text" class="form-control" id="send-note"/>
-        </div>
-        <div id="send-error" class="text-danger small" style="display:none;"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-        <button class="btn btn-primary" id="send-btn" onclick="sendVoucher()">שלח</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+        <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/use"
+              style="display:inline;">
+          <button type="submit" class="btn btn-success">✅ כן, מומש</button>
+        </form>
       </div>
     </div>
   </div>
 </div>
 {% endif %}
 
-{% endblock %}
-
-
-{% block extra_js %}
-<script>
-const voucherId = "{{ voucher.voucher_id }}";
-const vStatus   = "{{ voucher.status }}";
-
-/* ── Send / Resend ── */
-async function sendVoucher() {
-  const sent_via = document.getElementById('sent-via').value;
-  const note     = document.getElementById('send-note').value.trim();
-  const errEl    = document.getElementById('send-error');
-  const btn      = document.getElementById('send-btn');
-
-  errEl.style.display = 'none';
-  btn.disabled = true;
-  btn.textContent = 'שולח…';
-
-  const endpoint = vStatus === 'draft' ? 'send' : 'resend';
-  try {
-    const res  = await fetch('/vouchers/' + voucherId + '/' + endpoint, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sent_via, note: note || null }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      errEl.textContent = data.detail || 'שגיאה';
-      errEl.style.display = '';
-      return;
-    }
-    showToast('השובר נשלח בהצלחה');
-    setTimeout(() => location.reload(), 1000);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'שלח';
-  }
-}
-
-/* ── Mark used ── */
-async function markUsed() {
-  if (!confirm('לסמן שובר זה כמומש?\nפעולה זו בלתי הפיכה.')) return;
-
-  const res  = await fetch('/vouchers/' + voucherId + '/use', { method: 'PUT' });
-  const data = await res.json();
-
-  if (!res.ok) { showToast(data.detail || 'שגיאה', 'danger'); return; }
-  showToast('השובר סומן כמומש');
-  setTimeout(() => location.reload(), 1000);
-}
-
-/* ── Save receipt/notes ── */
-async function saveNotes() {
-  const receipt_number = document.getElementById('receipt-number').value.trim();
-  const receipt_date   = document.getElementById('receipt-date').value;
-  const notes          = document.getElementById('v-notes').value.trim();
-
-  const res  = await fetch('/vouchers/' + voucherId, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      receipt_number: receipt_number || null,
-      receipt_date:   receipt_date   || null,
-      notes:          notes          || null,
-    }),
-  });
-  const data = await res.json();
-
-  if (!res.ok) { showToast(data.detail || 'שגיאה', 'danger'); return; }
-  showToast('נשמר בהצלחה');
-}
-</script>
 {% endblock %}

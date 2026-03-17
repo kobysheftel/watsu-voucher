@@ -37,52 +37,83 @@
   </div>
 </div>
 
-<!-- Search bar + New Holder button -->
-<div class="row g-2 mb-4">
+<!-- Search form (GET) + New Holder button -->
+<div class="row g-2 mb-4 align-items-center">
   <div class="col">
-    <input type="text" id="search-input" class="form-control form-control-lg"
-           placeholder="חיפוש לפי שם, טלפון, מייל, מס׳ שובר..." autocomplete="off"/>
+    <form method="get" action="/home" class="d-flex gap-2">
+      <input type="text" name="q" class="form-control form-control-lg"
+             value="{{ search_q }}"
+             placeholder="חיפוש לפי שם, טלפון, מייל, מס׳ שובר..."/>
+      <button type="submit" class="btn btn-outline-secondary btn-lg">חפש</button>
+      {% if search_q %}
+      <a href="/home" class="btn btn-outline-danger btn-lg">✕</a>
+      {% endif %}
+    </form>
   </div>
   <div class="col-auto">
-    <button class="btn btn-primary btn-lg h-100"
+    <button class="btn btn-primary btn-lg"
             data-bs-toggle="modal" data-bs-target="#newHolderModal">
       + מחזיק חדש
     </button>
   </div>
 </div>
 
-<!-- Search results (shown when typing) -->
-<div id="search-section" style="display:none;" class="mb-4">
-  <h6 class="text-muted mb-2">תוצאות חיפוש</h6>
+<!-- Search results -->
+{% if search_results is not none %}
+  <h6 class="text-muted mb-2">
+    {{ search_results | length }} תוצאות עבור "{{ search_q }}"
+  </h6>
+
+  {% if search_results %}
   <div class="table-responsive bg-white shadow-sm rounded">
     <table class="table table-hover mb-0">
       <thead class="table-light">
         <tr>
           <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
-          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th>
+          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th></th>
         </tr>
       </thead>
-      <tbody id="search-tbody">
-        <tr><td colspan="6" class="text-center text-muted">מחפש…</td></tr>
+      <tbody>
+        {% for v in search_results %}
+        <tr>
+          <td class="font-monospace small">{{ v.voucher_id }}</td>
+          <td>{{ v.holder_name or (v.holder_ref.name if v.holder_ref else '—') }}</td>
+          <td>{{ v.mobile }}</td>
+          <td>{{ v.voucher_type }}</td>
+          <td>
+            {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+            {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
+            {% else %}<span class="badge-used">מומש</span>{% endif %}
+          </td>
+          <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <a href="/vouchers/{{ v.voucher_id }}/view"
+               class="btn btn-outline-primary btn-sm">פתח</a>
+          </td>
+        </tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
 
-<!-- Recent vouchers (shown when search is empty) -->
-<div id="recent-section">
+  {% else %}
+  <div class="text-center text-muted py-4">לא נמצאו תוצאות</div>
+  {% endif %}
+
+<!-- Recent vouchers (shown when no search) -->
+{% else %}
   <h6 class="text-muted mb-2">שוברים אחרונים</h6>
   <div class="table-responsive bg-white shadow-sm rounded">
     <table class="table table-hover mb-0">
       <thead class="table-light">
         <tr>
           <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
-          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th>הונפק</th>
+          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th>הונפק</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for v in recent %}
-        <tr class="clickable-row" onclick="location.href='/vouchers/{{ v.voucher_id }}/view'">
+        <tr>
           <td class="font-monospace small">{{ v.voucher_id }}</td>
           <td>{{ v.holder_name or '—' }}</td>
           <td>{{ v.mobile }}</td>
@@ -94,10 +125,14 @@
           </td>
           <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
           <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <a href="/vouchers/{{ v.voucher_id }}/view"
+               class="btn btn-outline-primary btn-sm">פתח</a>
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">
+          <td colspan="8" class="text-center text-muted py-4">
             אין שוברים עדיין —
             <button class="btn btn-link p-0"
                     data-bs-toggle="modal" data-bs-target="#newHolderModal">
@@ -109,10 +144,10 @@
       </tbody>
     </table>
   </div>
-</div>
+{% endif %}
 
 
-<!-- ── New Holder Modal ─────────────────────────────────────────── -->
+<!-- ── New Holder Modal (form POSTs to Python) ─────────────────────────── -->
 <div class="modal fade" id="newHolderModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -120,132 +155,30 @@
         <h5 class="modal-title">מחזיק חדש</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">טלפון נייד *</label>
-          <input type="text" class="form-control" id="h-mobile"
-                 placeholder="0541234567" maxlength="10"/>
-          <div class="form-text">10 ספרות, מתחיל ב-05</div>
+      <form method="post" action="/form/holders/new">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">טלפון נייד *</label>
+            <input type="text" name="mobile" class="form-control"
+                   placeholder="0541234567" maxlength="10" required/>
+            <div class="form-text">10 ספרות, מתחיל ב-05</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">שם מלא *</label>
+            <input type="text" name="name" class="form-control" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">אימייל</label>
+            <input type="email" name="email" class="form-control"/>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">שם מלא *</label>
-          <input type="text" class="form-control" id="h-name"/>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">שמור ופתח</button>
         </div>
-        <div class="mb-3">
-          <label class="form-label">אימייל</label>
-          <input type="email" class="form-control" id="h-email"/>
-        </div>
-        <div id="h-error" class="text-danger small" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-        <button class="btn btn-primary" id="h-save-btn" onclick="createHolder()">
-          שמור ופתח
-        </button>
-      </div>
+      </form>
     </div>
   </div>
 </div>
 
-{% endblock %}
-
-
-{% block extra_js %}
-<script>
-
-/* ── Create holder via API ── */
-async function createHolder() {
-  const mobile = document.getElementById('h-mobile').value.trim();
-  const name   = document.getElementById('h-name').value.trim();
-  const email  = document.getElementById('h-email').value.trim();
-  const errEl  = document.getElementById('h-error');
-
-  errEl.style.display = 'none';
-  if (!mobile || !name) {
-    errEl.textContent = 'נא למלא טלפון ושם';
-    errEl.style.display = '';
-    return;
-  }
-
-  const btn = document.getElementById('h-save-btn');
-  btn.disabled = true;
-  btn.textContent = 'שומר…';
-
-  try {
-    const res  = await fetch('/holders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile, name, email: email || null }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      errEl.textContent = data.detail || 'שגיאה';
-      errEl.style.display = '';
-      return;
-    }
-    location.href = '/holders/' + data.mobile + '/view';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'שמור ופתח';
-  }
-}
-
-/* ── Live search ── */
-let _searchTimer = null;
-
-document.getElementById('search-input').addEventListener('input', function () {
-  clearTimeout(_searchTimer);
-  const q = this.value.trim();
-
-  if (!q) {
-    document.getElementById('search-section').style.display = 'none';
-    document.getElementById('recent-section').style.display = '';
-    return;
-  }
-
-  document.getElementById('search-section').style.display = '';
-  document.getElementById('recent-section').style.display = 'none';
-  document.getElementById('search-tbody').innerHTML =
-    '<tr><td colspan="6" class="text-center text-muted">מחפש…</td></tr>';
-
-  _searchTimer = setTimeout(() => doSearch(q), 300);
-});
-
-async function doSearch(q) {
-  try {
-    const res  = await fetch('/search?q=' + encodeURIComponent(q));
-    if (!res.ok) return;
-    const data = await res.json();
-
-    if (data.length === 0) {
-      document.getElementById('search-tbody').innerHTML =
-        '<tr><td colspan="6" class="text-center text-muted">לא נמצאו תוצאות</td></tr>';
-      return;
-    }
-
-    document.getElementById('search-tbody').innerHTML = data.map(v => `
-      <tr class="clickable-row" onclick="location.href='/vouchers/${v.voucher_id}/view'">
-        <td class="font-monospace small">${v.voucher_id}</td>
-        <td>${v.holder_name || '—'}</td>
-        <td>${v.holder_mobile || '—'}</td>
-        <td>${v.voucher_type}</td>
-        <td>${statusBadge(v.status)}</td>
-        <td>${v.valid_until}</td>
-      </tr>
-    `).join('');
-  } catch (e) {
-    console.error('Search error', e);
-  }
-}
-
-/* Enter key triggers search immediately */
-document.getElementById('search-input').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') {
-    clearTimeout(_searchTimer);
-    const q = this.value.trim();
-    if (q) doSearch(q);
-  }
-});
-
-</script>
 {% endblock %}

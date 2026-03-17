@@ -1,19 +1,30 @@
 """
 Pages router — HTML UI routes (server-side rendered with Jinja2).
 
-GET /home                    → dashboard (stats + recent vouchers + search)
-GET /holders/{mobile}/view   → holder detail page
-GET /vouchers/{id}/view      → voucher detail page
-GET /report/view             → filterable report page
+GET  /home                       → dashboard (stats + search + recent)
+GET  /holders/{mobile}/view      → holder detail page
+GET  /vouchers/{id}/view         → voucher detail page
+GET  /report/view                → filterable report page
+
+POST /form/holders/new           → create holder, redirect to holder page
+POST /form/holders/{mobile}/edit → update holder name/email, redirect back
+POST /form/vouchers/new          → create voucher draft, redirect to voucher page
+POST /form/vouchers/{id}/send    → first-send OR resend (checks status), redirect back
+POST /form/vouchers/{id}/use     → mark used, redirect back
+POST /form/vouchers/{id}/notes   → update receipt/notes, redirect back
+
+All POST handlers use HTML form data (not JSON) and follow POST-Redirect-GET.
+Flash messages are passed as ?flash=...&flash_type=success/danger/warning in the URL.
 """
 
 from datetime import date
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,70 +35,95 @@ router    = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="templates")
 
 
-# ── Home / dashboard ──────────────────────────────────────────────────────────
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+def _flash(url: str, msg: str, t: str = "success") -> RedirectResponse:
+    """Build a POST-Redirect-GET response with a flash message in the URL."""
+    sep = "&" if "?" in url else "?"
+    redirect_url = f"{url}{sep}flash={quote(msg)}&flash_type={t}"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+# ── GET: Home / dashboard ─────────────────────────────────────────────────────
 
 @router.get("/home", response_class=HTMLResponse)
-def home_page(request: Request, db: Session = Depends(get_db)):
-    """Dashboard: stats, search box, and 10 most recent vouchers."""
+def home_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    q: Optional[str] = Query(None),
+):
+    """Dashboard: stats, search (GET form), and 10 most recent vouchers."""
     total   = db.query(Voucher).count()
     drafts  = db.query(Voucher).filter_by(status="draft").count()
     sent    = db.query(Voucher).filter_by(status="sent").count()
     used    = db.query(Voucher).filter_by(status="used").count()
     holders = db.query(Holder).count()
 
-    recent = (
-        db.query(Voucher)
-        .order_by(Voucher.issued_at.desc())
-        .limit(10)
-        .all()
-    )
+    recent         = []
+    search_results = None
+
+    if q:
+        # Server-side search across all relevant fields
+        term = f"%{q}%"
+        search_results = (
+            db.query(Voucher)
+            .outerjoin(Holder, Holder.mobile == Voucher.mobile)
+            .filter(or_(
+                Voucher.voucher_id.ilike(term),
+                Voucher.holder_name.ilike(term),
+                Voucher.holder_mobile.ilike(term),
+                Voucher.holder_email.ilike(term),
+                Holder.name.ilike(term),
+                Holder.mobile.ilike(term),
+                Holder.email.ilike(term),
+            ))
+            .order_by(Voucher.issued_at.desc())
+            .all()
+        )
+    else:
+        recent = (
+            db.query(Voucher)
+            .order_by(Voucher.issued_at.desc())
+            .limit(10)
+            .all()
+        )
 
     return templates.TemplateResponse("home.html", {
-        "request": request,
-        "stats": {
-            "total":   total,
-            "draft":   drafts,
-            "sent":    sent,
-            "used":    used,
-            "holders": holders,
-        },
-        "recent": recent,
+        "request":        request,
+        "stats":          {"total": total, "draft": drafts, "sent": sent,
+                           "used": used, "holders": holders},
+        "recent":         recent,
+        "search_q":       q or "",
+        "search_results": search_results,
     })
 
 
-# ── Holder detail page ────────────────────────────────────────────────────────
+# ── GET: Holder detail page ───────────────────────────────────────────────────
 
 @router.get("/holders/{mobile}/view", response_class=HTMLResponse)
 def holder_page(mobile: str, request: Request, db: Session = Depends(get_db)):
-    """Holder detail: info card + vouchers table + create/edit modals."""
+    """Holder detail: info card, vouchers table, edit and new-voucher modals."""
     holder = db.get(Holder, mobile)
     if not holder:
         raise HTTPException(status_code=404, detail=f"מחזיק לא נמצא: {mobile}")
 
-    can_edit = rules.can_edit_holder(db, mobile)
-
     return templates.TemplateResponse("holder.html", {
         "request":  request,
         "holder":   holder,
-        "can_edit": can_edit,
-        "vouchers": holder.vouchers,   # relationship ordered by issued_at desc
+        "can_edit": rules.can_edit_holder(db, mobile),
+        "vouchers": holder.vouchers,
     })
 
 
-# ── Voucher detail page ───────────────────────────────────────────────────────
+# ── GET: Voucher detail page ──────────────────────────────────────────────────
 
 @router.get("/vouchers/{voucher_id}/view", response_class=HTMLResponse)
-def voucher_page(
-    voucher_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """Voucher detail: info, holder snapshot, receipt fields, actions, QR, history."""
+def voucher_page(voucher_id: str, request: Request, db: Session = Depends(get_db)):
+    """Voucher detail: info, actions, QR, sending history, receipt fields."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
 
-    # Load live holder record for navigation link (may be None if deleted)
     holder = db.get(Holder, voucher.mobile) if voucher.mobile else None
 
     return templates.TemplateResponse("voucher_view.html", {
@@ -97,7 +133,7 @@ def voucher_page(
     })
 
 
-# ── Report page ───────────────────────────────────────────────────────────────
+# ── GET: Report page ──────────────────────────────────────────────────────────
 
 @router.get("/report/view", response_class=HTMLResponse)
 def report_page(
@@ -109,44 +145,165 @@ def report_page(
     date_to:        Optional[date] = Query(None),
     receipt_number: Optional[str]  = Query(None),
 ):
-    """Full report with filters and CSV-export link."""
+    """Filterable report with CSV export link."""
     filters = {
         "status":         status,
         "voucher_type":   voucher_type,
-        "date_from":      str(date_from) if date_from else None,
-        "date_to":        str(date_to)   if date_to   else None,
-        "receipt_number": receipt_number,
+        "date_from":      str(date_from) if date_from else "",
+        "date_to":        str(date_to)   if date_to   else "",
+        "receipt_number": receipt_number or "",
         "has_any":        any([status, voucher_type, date_from, date_to, receipt_number]),
     }
 
     q = db.query(Voucher)
-    if status:
-        q = q.filter(Voucher.status == status)
-    if voucher_type:
-        q = q.filter(Voucher.voucher_type == voucher_type)
-    if receipt_number:
-        q = q.filter(Voucher.receipt_number.ilike(f"%{receipt_number}%"))
-    if date_from:
-        q = q.filter(Voucher.issued_at >= date_from)
-    if date_to:
-        q = q.filter(Voucher.issued_at <= date_to)
+    if status:         q = q.filter(Voucher.status == status)
+    if voucher_type:   q = q.filter(Voucher.voucher_type == voucher_type)
+    if receipt_number: q = q.filter(Voucher.receipt_number.ilike(f"%{receipt_number}%"))
+    if date_from:      q = q.filter(Voucher.issued_at >= date_from)
+    if date_to:        q = q.filter(Voucher.issued_at <= date_to)
 
     vouchers = q.order_by(Voucher.issued_at.desc()).all()
 
-    # Build query string for the CSV export link (passes same filters to /report?fmt=csv)
     csv_params = {k: v for k, v in {
-        "status":         status,
-        "voucher_type":   voucher_type,
-        "date_from":      str(date_from) if date_from else None,
-        "date_to":        str(date_to)   if date_to   else None,
-        "receipt_number": receipt_number,
-        "fmt":            "csv",
+        "status": status, "voucher_type": voucher_type,
+        "date_from": str(date_from) if date_from else None,
+        "date_to":   str(date_to)   if date_to   else None,
+        "receipt_number": receipt_number, "fmt": "csv",
     }.items() if v}
-    filter_qs = urlencode(csv_params)
 
     return templates.TemplateResponse("report.html", {
         "request":   request,
         "vouchers":  vouchers,
         "filters":   filters,
-        "filter_qs": filter_qs,
+        "filter_qs": urlencode(csv_params),
     })
+
+
+# ── POST: Create holder ───────────────────────────────────────────────────────
+
+@router.post("/form/holders/new")
+async def form_create_holder(
+    mobile: str           = Form(...),
+    name:   str           = Form(...),
+    email:  Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Create or retrieve a holder, then redirect to their detail page."""
+    try:
+        holder, _ = rules.get_or_create_holder(db, mobile, name, email or None)
+        return _flash(f"/holders/{holder.mobile}/view", "המחזיק נשמר בהצלחה")
+    except Exception as e:
+        return _flash("/home", str(e), "danger")
+
+
+# ── POST: Update holder ───────────────────────────────────────────────────────
+
+@router.post("/form/holders/{mobile}/edit")
+async def form_update_holder(
+    mobile: str,
+    name:   Optional[str] = Form(None),
+    email:  Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Update holder name/email and redirect back."""
+    try:
+        rules.update_holder(db, mobile, name or None, email or None)
+        return _flash(f"/holders/{mobile}/view", "הפרטים עודכנו")
+    except rules.RulesError as e:
+        return _flash(f"/holders/{mobile}/view", str(e), "danger")
+
+
+# ── POST: Create voucher ──────────────────────────────────────────────────────
+
+@router.post("/form/vouchers/new")
+async def form_create_voucher(
+    mobile:         str           = Form(...),
+    voucher_type:   str           = Form(...),
+    valid_until:    str           = Form(...),          # "YYYY-MM-DD" from date input
+    receipt_number: Optional[str] = Form(None),
+    receipt_date:   Optional[str] = Form(None),
+    notes:          Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Create a draft voucher and redirect to its detail page."""
+    try:
+        v = rules.create_voucher(
+            db,
+            mobile       = mobile,
+            voucher_type = voucher_type,
+            valid_until  = date.fromisoformat(valid_until),
+            receipt_number = receipt_number or None,
+            receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
+            notes          = notes or None,
+        )
+        return _flash(f"/vouchers/{v.voucher_id}/view", "השובר נוצר בהצלחה")
+    except rules.RulesError as e:
+        return _flash(f"/holders/{mobile}/view", str(e), "danger")
+    except ValueError as e:
+        return _flash(f"/holders/{mobile}/view", f"תאריך לא תקין: {e}", "danger")
+
+
+# ── POST: Send / Resend voucher ───────────────────────────────────────────────
+
+@router.post("/form/vouchers/{voucher_id}/send")
+async def form_send_voucher(
+    voucher_id: str,
+    sent_via:   str           = Form(...),
+    note:       Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """First-send or resend depending on current voucher status."""
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        return _flash("/home", f"שובר לא נמצא: {voucher_id}", "danger")
+    try:
+        if voucher.status == "draft":
+            rules.first_send(db, voucher_id, sent_via, note or None)
+            msg = "השובר נשלח בהצלחה"
+        else:
+            rules.resend(db, voucher_id, sent_via, note or None)
+            msg = "השובר נשלח מחדש"
+        return _flash(f"/vouchers/{voucher_id}/view", msg)
+    except rules.RulesError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
+
+
+# ── POST: Mark voucher used ───────────────────────────────────────────────────
+
+@router.post("/form/vouchers/{voucher_id}/use")
+async def form_mark_used(
+    voucher_id: str,
+    db: Session = Depends(get_db),
+):
+    """Mark voucher as used (fully frozen) and redirect back."""
+    try:
+        rules.mark_used(db, voucher_id)
+        return _flash(f"/vouchers/{voucher_id}/view", "השובר סומן כמומש ✅")
+    except rules.RulesError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
+
+
+# ── POST: Update receipt / notes ──────────────────────────────────────────────
+
+@router.post("/form/vouchers/{voucher_id}/notes")
+async def form_update_notes(
+    voucher_id:     str,
+    receipt_number: Optional[str] = Form(None),
+    receipt_date:   Optional[str] = Form(None),
+    notes:          Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Update receipt number, receipt date, and notes; redirect back."""
+    try:
+        rules.update_voucher_fields(
+            db,
+            voucher_id,
+            receipt_number = receipt_number or None,
+            receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
+            notes          = notes or None,
+        )
+        return _flash(f"/vouchers/{voucher_id}/view", "נשמר בהצלחה")
+    except rules.RulesError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
+    except ValueError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", f"תאריך לא תקין: {e}", "danger")
