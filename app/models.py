@@ -12,6 +12,7 @@ Key design decisions:
 """
 
 from datetime import datetime, date
+from app.utils import utcnow
 from sqlalchemy import (
     Column, Text, Integer, Date, DateTime, ForeignKey, String
 )

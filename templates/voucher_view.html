@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}שובר {{ voucher.voucher_id }} — גלים ונפש{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/home">ראשי</a></li>
+    {% if holder %}
+    <li class="breadcrumb-item">
+      <a href="/holders/{{ holder.mobile }}/view">{{ holder.name }}</a>
+    </li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ voucher.voucher_id }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+
+  <!-- ── Left column: voucher details ──────────────────────────── -->
+  <div class="col-md-7">
+
+    <!-- Main voucher card -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="font-monospace fw-bold">{{ voucher.voucher_id }}</span>
+        {% if voucher.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+        {% elif voucher.status == 'sent' %}<span class="badge-sent">נשלח</span>
+        {% else %}<span class="badge-used">מומש</span>{% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <div class="col-5 text-muted small">סוג שובר</div>
+          <div class="col-7 fw-bold fs-5">{{ voucher.voucher_type }}</div>
+        </div>
+        <div class="row mb-2">
+          <div class="col-5 text-muted small">תוקף עד</div>
+          <div class="col-7">{{ voucher.valid_until.strftime('%d/%m/%Y') }}</div>
+        </div>
+        <div class="row mb-2">
+          <div class="col-5 text-muted small">הונפק</div>
+          <div class="col-7">{{ voucher.issued_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% if voucher.first_sent_at %}
+        <div class="row mb-2">
+          <div class="col-5 text-muted small">נשלח ראשון</div>
+          <div class="col-7">{{ voucher.first_sent_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Holder info -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>פרטי מקבל</span>
+        {% if voucher.is_cemented %}
+        <span class="badge bg-light text-secondary border small">מוצמד</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% set d_name   = voucher.holder_name   or (holder.name   if holder else '—') %}
+        {% set d_mobile = voucher.holder_mobile or (holder.mobile if holder else '—') %}
+        {% set d_email  = voucher.holder_email  or (holder.email  if holder else '') %}
+
+        <div class="row mb-1">
+          <div class="col-4 text-muted small">שם</div>
+          <div class="col-8 fw-bold">{{ d_name }}</div>
+        </div>
+        <div class="row mb-1">
+          <div class="col-4 text-muted small">טלפון</div>
+          <div class="col-8">{{ d_mobile }}</div>
+        </div>
+        {% if d_email %}
+        <div class="row mb-1">
+          <div class="col-4 text-muted small">אימייל</div>
+          <div class="col-8 small">{{ d_email }}</div>
+        </div>
+        {% endif %}
+
+        {% if holder %}
+        <div class="mt-2">
+          <a href="/holders/{{ holder.mobile }}/view"
+             class="btn btn-outline-secondary btn-sm">
+            לדף המחזיק ←
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Receipt / Notes (editable until used) -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header">פרטי קבלה / הערות</div>
+      <div class="card-body">
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">מספר קבלה</label>
+          <input type="text" class="form-control form-control-sm" id="receipt-number"
+                 value="{{ voucher.receipt_number or '' }}"
+                 {% if voucher.is_frozen %}readonly{% endif %}/>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">תאריך קבלה</label>
+          <input type="date" class="form-control form-control-sm" id="receipt-date"
+                 value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
+                 {% if voucher.is_frozen %}readonly{% endif %}/>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">הערות</label>
+          <textarea class="form-control form-control-sm" id="v-notes" rows="2"
+                    {% if voucher.is_frozen %}readonly{% endif %}>{{ voucher.notes or '' }}</textarea>
+        </div>
+        {% if not voucher.is_frozen %}
+        <button class="btn btn-outline-primary btn-sm" onclick="saveNotes()">
+          💾 שמור הערות
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /left col -->
+
+
+  <!-- ── Right column: actions + QR + history ──────────────────── -->
+  <div class="col-md-5">
+
+    <!-- Action buttons -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header">פעולות</div>
+      <div class="card-body d-grid gap-2">
+
+        {% if voucher.status == 'draft' %}
+          <button class="btn btn-primary"
+                  data-bs-toggle="modal" data-bs-target="#sendModal">
+            📤 שלח שובר ראשון
+          </button>
+
+        {% elif voucher.status == 'sent' %}
+          <button class="btn btn-outline-primary"
+                  data-bs-toggle="modal" data-bs-target="#sendModal">
+            🔄 שלח מחדש
+          </button>
+          <button class="btn btn-success" onclick="markUsed()">
+            ✅ סמן כמומש
+          </button>
+
+        {% else %}
+          <div class="text-center text-muted py-2 small">
+            ✅ שובר מומש — לא ניתן לפעולות נוספות
+          </div>
+        {% endif %}
+
+        <!-- WhatsApp link (shown when cemented mobile exists) -->
+        {% set wa_num = voucher.holder_mobile or (holder.mobile if holder else None) %}
+        {% if wa_num and voucher.status in ['sent','used'] %}
+        <a href="https://wa.me/972{{ wa_num[1:] }}" target="_blank"
+           class="btn btn-outline-success btn-sm">
+          📱 פתח ווטסאפ
+        </a>
+        {% endif %}
+
+        <!-- PDF download (when PDF exists) -->
+        {% if voucher.pdf_path %}
+        <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
+           class="btn btn-outline-secondary btn-sm">
+          📄 הורד PDF
+        </a>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- QR code image -->
+    {% if voucher.qr_path %}
+    <div class="card shadow-sm mb-3 text-center">
+      <div class="card-header">קוד QR</div>
+      <div class="card-body">
+        <img src="/vouchers/{{ voucher.voucher_id }}/qr"
+             class="img-fluid" style="max-width:160px;"/>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Sending history -->
+    {% if voucher.sendings %}
+    <div class="card shadow-sm">
+      <div class="card-header">היסטוריית שליחות</div>
+      <ul class="list-group list-group-flush">
+        {% for s in voucher.sendings %}
+        <li class="list-group-item small">
+          <div class="d-flex justify-content-between">
+            <span>{{ s.sent_via_display }}</span>
+            <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          </div>
+          {% if s.note %}
+          <div class="text-muted fst-italic">{{ s.note }}</div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+  </div><!-- /right col -->
+</div><!-- /row -->
+
+
+<!-- ── Send / Resend Modal ──────────────────────────────────────── -->
+{% if voucher.status in ['draft', 'sent'] %}
+<div class="modal fade" id="sendModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          {% if voucher.status == 'draft' %}שליחה ראשונה{% else %}שליחה מחדש{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">אמצעי שליחה *</label>
+          <select class="form-select" id="sent-via">
+            <option value="WA">📱 וואטסאפ</option>
+            <option value="EMAIL">📧 מייל</option>
+            <option value="PRINT">🖨️ הדפסה</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">הערה (אופציונלי)</label>
+          <input type="text" class="form-control" id="send-note"/>
+        </div>
+        <div id="send-error" class="text-danger small" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+        <button class="btn btn-primary" id="send-btn" onclick="sendVoucher()">שלח</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const voucherId = "{{ voucher.voucher_id }}";
+const vStatus   = "{{ voucher.status }}";
+
+/* ── Send / Resend ── */
+async function sendVoucher() {
+  const sent_via = document.getElementById('sent-via').value;
+  const note     = document.getElementById('send-note').value.trim();
+  const errEl    = document.getElementById('send-error');
+  const btn      = document.getElementById('send-btn');
+
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'שולח…';
+
+  const endpoint = vStatus === 'draft' ? 'send' : 'resend';
+  try {
+    const res  = await fetch('/vouchers/' + voucherId + '/' + endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sent_via, note: note || null }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errEl.textContent = data.detail || 'שגיאה';
+      errEl.style.display = '';
+      return;
+    }
+    showToast('השובר נשלח בהצלחה');
+    setTimeout(() => location.reload(), 1000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'שלח';
+  }
+}
+
+/* ── Mark used ── */
+async function markUsed() {
+  if (!confirm('לסמן שובר זה כמומש?\nפעולה זו בלתי הפיכה.')) return;
+
+  const res  = await fetch('/vouchers/' + voucherId + '/use', { method: 'PUT' });
+  const data = await res.json();
+
+  if (!res.ok) { showToast(data.detail || 'שגיאה', 'danger'); return; }
+  showToast('השובר סומן כמומש');
+  setTimeout(() => location.reload(), 1000);
+}
+
+/* ── Save receipt/notes ── */
+async function saveNotes() {
+  const receipt_number = document.getElementById('receipt-number').value.trim();
+  const receipt_date   = document.getElementById('receipt-date').value;
+  const notes          = document.getElementById('v-notes').value.trim();
+
+  const res  = await fetch('/vouchers/' + voucherId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      receipt_number: receipt_number || null,
+      receipt_date:   receipt_date   || null,
+      notes:          notes          || null,
+    }),
+  });
+  const data = await res.json();
+
+  if (!res.ok) { showToast(data.detail || 'שגיאה', 'danger'); return; }
+  showToast('נשמר בהצלחה');
+}
+</script>
+{% endblock %}

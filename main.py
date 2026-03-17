@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import holders, vouchers, reports
+from app.routers import holders, vouchers, reports, pages
 
 
 # --- Lifespan: replaces deprecated @app.on_event("startup") ---
@@ -35,6 +35,7 @@ app = FastAPI(
 app.include_router(holders.router)
 app.include_router(vouchers.router)
 app.include_router(reports.router)
+app.include_router(pages.router)
 
 # --- Static files ---
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")

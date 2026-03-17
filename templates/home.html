@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}ראשי — גלים ונפש{% endblock %}
+
+{% block content %}
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  <div class="col">
+    <div class="stat-card shadow-sm">
+      <div class="stat-num text-dark">{{ stats.total }}</div>
+      <div class="stat-lbl">סה״כ שוברים</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card shadow-sm">
+      <div class="stat-num text-secondary">{{ stats.draft }}</div>
+      <div class="stat-lbl">טיוטות</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card shadow-sm">
+      <div class="stat-num text-primary">{{ stats.sent }}</div>
+      <div class="stat-lbl">נשלחו</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card shadow-sm">
+      <div class="stat-num text-success">{{ stats.used }}</div>
+      <div class="stat-lbl">מומשו</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card shadow-sm">
+      <div class="stat-num text-info">{{ stats.holders }}</div>
+      <div class="stat-lbl">מחזיקים</div>
+    </div>
+  </div>
+</div>
+
+<!-- Search bar + New Holder button -->
+<div class="row g-2 mb-4">
+  <div class="col">
+    <input type="text" id="search-input" class="form-control form-control-lg"
+           placeholder="חיפוש לפי שם, טלפון, מייל, מס׳ שובר..." autocomplete="off"/>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary btn-lg h-100"
+            data-bs-toggle="modal" data-bs-target="#newHolderModal">
+      + מחזיק חדש
+    </button>
+  </div>
+</div>
+
+<!-- Search results (shown when typing) -->
+<div id="search-section" style="display:none;" class="mb-4">
+  <h6 class="text-muted mb-2">תוצאות חיפוש</h6>
+  <div class="table-responsive bg-white shadow-sm rounded">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
+          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th>
+        </tr>
+      </thead>
+      <tbody id="search-tbody">
+        <tr><td colspan="6" class="text-center text-muted">מחפש…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recent vouchers (shown when search is empty) -->
+<div id="recent-section">
+  <h6 class="text-muted mb-2">שוברים אחרונים</h6>
+  <div class="table-responsive bg-white shadow-sm rounded">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
+          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th>הונפק</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in recent %}
+        <tr class="clickable-row" onclick="location.href='/vouchers/{{ v.voucher_id }}/view'">
+          <td class="font-monospace small">{{ v.voucher_id }}</td>
+          <td>{{ v.holder_name or '—' }}</td>
+          <td>{{ v.mobile }}</td>
+          <td>{{ v.voucher_type }}</td>
+          <td>
+            {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+            {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
+            {% else %}<span class="badge-used">מומש</span>{% endif %}
+          </td>
+          <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
+          <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            אין שוברים עדיין —
+            <button class="btn btn-link p-0"
+                    data-bs-toggle="modal" data-bs-target="#newHolderModal">
+              צור מחזיק ראשון
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ── New Holder Modal ─────────────────────────────────────────── -->
+<div class="modal fade" id="newHolderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">מחזיק חדש</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">טלפון נייד *</label>
+          <input type="text" class="form-control" id="h-mobile"
+                 placeholder="0541234567" maxlength="10"/>
+          <div class="form-text">10 ספרות, מתחיל ב-05</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">שם מלא *</label>
+          <input type="text" class="form-control" id="h-name"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">אימייל</label>
+          <input type="email" class="form-control" id="h-email"/>
+        </div>
+        <div id="h-error" class="text-danger small" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+        <button class="btn btn-primary" id="h-save-btn" onclick="createHolder()">
+          שמור ופתח
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+/* ── Create holder via API ── */
+async function createHolder() {
+  const mobile = document.getElementById('h-mobile').value.trim();
+  const name   = document.getElementById('h-name').value.trim();
+  const email  = document.getElementById('h-email').value.trim();
+  const errEl  = document.getElementById('h-error');
+
+  errEl.style.display = 'none';
+  if (!mobile || !name) {
+    errEl.textContent = 'נא למלא טלפון ושם';
+    errEl.style.display = '';
+    return;
+  }
+
+  const btn = document.getElementById('h-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'שומר…';
+
+  try {
+    const res  = await fetch('/holders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, name, email: email || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.detail || 'שגיאה';
+      errEl.style.display = '';
+      return;
+    }
+    location.href = '/holders/' + data.mobile + '/view';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'שמור ופתח';
+  }
+}
+
+/* ── Live search ── */
+let _searchTimer = null;
+
+document.getElementById('search-input').addEventListener('input', function () {
+  clearTimeout(_searchTimer);
+  const q = this.value.trim();
+
+  if (!q) {
+    document.getElementById('search-section').style.display = 'none';
+    document.getElementById('recent-section').style.display = '';
+    return;
+  }
+
+  document.getElementById('search-section').style.display = '';
+  document.getElementById('recent-section').style.display = 'none';
+  document.getElementById('search-tbody').innerHTML =
+    '<tr><td colspan="6" class="text-center text-muted">מחפש…</td></tr>';
+
+  _searchTimer = setTimeout(() => doSearch(q), 300);
+});
+
+async function doSearch(q) {
+  try {
+    const res  = await fetch('/search?q=' + encodeURIComponent(q));
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (data.length === 0) {
+      document.getElementById('search-tbody').innerHTML =
+        '<tr><td colspan="6" class="text-center text-muted">לא נמצאו תוצאות</td></tr>';
+      return;
+    }
+
+    document.getElementById('search-tbody').innerHTML = data.map(v => `
+      <tr class="clickable-row" onclick="location.href='/vouchers/${v.voucher_id}/view'">
+        <td class="font-monospace small">${v.voucher_id}</td>
+        <td>${v.holder_name || '—'}</td>
+        <td>${v.holder_mobile || '—'}</td>
+        <td>${v.voucher_type}</td>
+        <td>${statusBadge(v.status)}</td>
+        <td>${v.valid_until}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('Search error', e);
+  }
+}
+
+/* Enter key triggers search immediately */
+document.getElementById('search-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    clearTimeout(_searchTimer);
+    const q = this.value.trim();
+    if (q) doSearch(q);
+  }
+});
+
+</script>
+{% endblock %}

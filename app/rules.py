@@ -13,7 +13,8 @@ Nothing in here knows about HTTP — it only receives a DB session
 and returns updated ORM objects. Routers call these functions.
 """
 
-from datetime import datetime, date, timezone
+from datetime import datetime, date
+from app.utils import utcnow
 from pathlib import Path
 from sqlalchemy.orm import Session
 
@@ -57,8 +58,8 @@ def get_or_create_holder(db: Session, mobile: str, name: str,
         mobile=mobile,
         name=name,
         email=email,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db.add(holder)
     db.commit()
@@ -85,7 +86,7 @@ def update_holder(db: Session, mobile: str,
         holder.name = name
     if email is not None:
         holder.email = email
-    holder.updated_at = datetime.now(timezone.utc)
+    holder.updated_at = utcnow()
 
     db.commit()
     db.refresh(holder)
@@ -129,7 +130,7 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
         sequence=seq,
         voucher_type=voucher_type,
         valid_until=valid_until,
-        issued_at=datetime.now(timezone.utc),
+        issued_at=utcnow(),
         status="draft",
         receipt_number=receipt_number,
         receipt_date=receipt_date,
@@ -196,7 +197,7 @@ def first_send(db: Session, voucher_id: str,
     _cement(db, voucher)
 
     # 2. Set first_sent_at (never changes again)
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     voucher.first_sent_at = now
 
     # 3. Prepare file folder
@@ -263,7 +264,7 @@ def resend(db: Session, voucher_id: str,
     # Log new send event
     sending = Sending(
         voucher_id=voucher_id,
-        sent_at=datetime.now(timezone.utc),
+        sent_at=utcnow(),
         sent_via=sent_via,
         note=note,
     )

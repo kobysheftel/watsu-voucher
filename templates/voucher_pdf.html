@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    /* xhtml2pdf-compatible styles — no flexbox, no grid, use tables */
+    @page {
+      size: 148mm 210mm;   /* A5 portrait */
+      margin: 8mm;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      direction: rtl;
+      unicode-bidi: embed;
+      font-size: 11pt;
+      color: #2c3e50;
+    }
+
+    /* Outer voucher frame */
+    .voucher {
+      border: 3px double #8B7355;
+      padding: 8mm 7mm;
+      height: 190mm;
+    }
+
+    /* Business name header */
+    .header {
+      text-align: center;
+      border-bottom: 1px solid #8B7355;
+      padding-bottom: 5pt;
+      margin-bottom: 6pt;
+    }
+    .business-name {
+      font-size: 20pt;
+      font-weight: bold;
+      color: #8B7355;
+    }
+    .business-sub {
+      font-size: 9pt;
+      color: #888;
+    }
+
+    /* Gift voucher title */
+    .gift-title {
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      color: #2c3e50;
+      margin: 5pt 0 3pt 0;
+    }
+
+    /* Voucher type — large display */
+    .voucher-type {
+      font-size: 22pt;
+      font-weight: bold;
+      color: #8B7355;
+      text-align: center;
+      margin: 4pt 0;
+    }
+
+    .divider {
+      border-top: 1px solid #ddd;
+      margin: 5pt 0;
+    }
+
+    /* Holder detail rows */
+    .detail-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 4pt 0;
+    }
+    .detail-label {
+      font-size: 8pt;
+      color: #999;
+      width: 22%;
+      padding: 2pt 0;
+    }
+    .detail-value {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #2c3e50;
+      padding: 2pt 4pt;
+    }
+
+    /* Bottom section: pool image + QR side by side */
+    .bottom-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 5pt;
+    }
+    .pool-cell {
+      text-align: center;
+      vertical-align: middle;
+    }
+    .pool-img {
+      width: 55mm;
+      height: auto;
+    }
+    .qr-cell {
+      text-align: center;
+      vertical-align: bottom;
+      width: 32mm;
+    }
+    .qr-img {
+      width: 28mm;
+      height: 28mm;
+    }
+
+    /* Footer info */
+    .validity {
+      font-size: 10pt;
+      color: #c0392b;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 5pt;
+    }
+    .voucher-id-line {
+      font-size: 7pt;
+      color: #aaa;
+      text-align: center;
+      margin-top: 3pt;
+    }
+    .receipt-line {
+      font-size: 7pt;
+      color: #aaa;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div class="voucher">
+
+  <!-- Header: business name -->
+  <div class="header">
+    <div class="business-name">גלים ונפש</div>
+    <div class="business-sub">ווטסו — טיפול במים חמים</div>
+  </div>
+
+  <!-- Gift voucher title + type -->
+  <div class="gift-title">שובר מתנה</div>
+  <div class="voucher-type">{{ voucher.voucher_type }}</div>
+
+  <div class="divider"></div>
+
+  <!-- Holder details -->
+  <table class="detail-table">
+    <tr>
+      <td class="detail-label">מוענק ל:</td>
+      <td class="detail-value">{{ voucher.holder_name }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label">טלפון:</td>
+      <td class="detail-value">{{ voucher.holder_mobile }}</td>
+    </tr>
+    {% if voucher.holder_email %}
+    <tr>
+      <td class="detail-label">מייל:</td>
+      <td class="detail-value" style="font-size:9pt;">{{ voucher.holder_email }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  <div class="divider"></div>
+
+  <!-- Pool image + QR code side by side -->
+  <table class="bottom-table">
+    <tr>
+      <td class="pool-cell">
+        {% if pool_image_b64 %}
+        <img src="data:image/png;base64,{{ pool_image_b64 }}" class="pool-img" />
+        {% endif %}
+      </td>
+      <td class="qr-cell">
+        {% if qr_image_b64 %}
+        <img src="data:image/png;base64,{{ qr_image_b64 }}" class="qr-img" />
+        <div style="font-size:6pt; color:#999; margin-top:2pt;">סרוק לאימות</div>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Validity -->
+  <div class="validity">בתוקף עד: {{ voucher.valid_until.strftime('%d/%m/%Y') }}</div>
+
+  <!-- Voucher ID and receipt -->
+  <div class="voucher-id-line">מס׳ שובר: {{ voucher.voucher_id }}</div>
+  {% if voucher.receipt_number %}
+  <div class="receipt-line">מס׳ קבלה: {{ voucher.receipt_number }}</div>
+  {% endif %}
+
+</div>
+</body>
+</html>

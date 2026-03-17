@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}דוח שוברים — גלים ונפש{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">דוח שוברים</h4>
+  {% if vouchers %}
+  <a href="{{ request.url.path }}?{{ filter_qs }}&fmt=csv"
+     class="btn btn-outline-secondary btn-sm">
+    ⬇️ ייצוא CSV
+  </a>
+  {% endif %}
+</div>
+
+<!-- Filter form -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" action="/report/view" class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small text-muted">סטטוס</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">הכל</option>
+          <option value="draft"  {% if filters.status == 'draft'  %}selected{% endif %}>טיוטה</option>
+          <option value="sent"   {% if filters.status == 'sent'   %}selected{% endif %}>נשלח</option>
+          <option value="used"   {% if filters.status == 'used'   %}selected{% endif %}>מומש</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted">סוג שובר</label>
+        <select name="voucher_type" class="form-select form-select-sm">
+          <option value="">הכל</option>
+          <option value="ליחיד" {% if filters.voucher_type == 'ליחיד' %}selected{% endif %}>ליחיד</option>
+          <option value="לזוג"  {% if filters.voucher_type == 'לזוג'  %}selected{% endif %}>לזוג</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted">מתאריך</label>
+        <input type="date" name="date_from" class="form-control form-control-sm"
+               value="{{ filters.date_from or '' }}"/>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted">עד תאריך</label>
+        <input type="date" name="date_to" class="form-control form-control-sm"
+               value="{{ filters.date_to or '' }}"/>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted">מס׳ קבלה</label>
+        <input type="text" name="receipt_number" class="form-control form-control-sm"
+               value="{{ filters.receipt_number or '' }}"/>
+      </div>
+      <div class="col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill">סנן</button>
+        <a href="/report/view" class="btn btn-outline-secondary btn-sm">אפס</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Results -->
+{% if vouchers %}
+<div class="small text-muted mb-2">{{ vouchers | length }} תוצאות</div>
+
+<div class="table-responsive bg-white shadow-sm rounded">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>מס׳ שובר</th>
+        <th>שם</th>
+        <th>טלפון</th>
+        <th>סוג</th>
+        <th>סטטוס</th>
+        <th>תוקף עד</th>
+        <th>הונפק</th>
+        <th>מס׳ קבלה</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vouchers %}
+      <tr class="clickable-row"
+          onclick="location.href='/vouchers/{{ v.voucher_id }}/view'">
+        <td class="font-monospace small">{{ v.voucher_id }}</td>
+        <td>
+          {% if v.holder_name %}{{ v.holder_name }}
+          {% elif v.holder_ref %}{{ v.holder_ref.name }}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ v.mobile }}</td>
+        <td>{{ v.voucher_type }}</td>
+        <td>
+          {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+          {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
+          {% else %}<span class="badge-used">מומש</span>{% endif %}
+        </td>
+        <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
+        <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
+        <td>{{ v.receipt_number or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif filters.has_any %}
+<div class="text-center text-muted py-5">לא נמצאו שוברים התואמים את הסינון</div>
+{% else %}
+<div class="text-center text-muted py-5">אין שוברים עדיין</div>
+{% endif %}
+
+{% endblock %}
