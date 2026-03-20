@@ -9,11 +9,18 @@ Then open: http://localhost:8000
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
 from app.routers import holders, vouchers, reports, pages
+
+
+# --- Ensure required directories exist ---
+Path("vouchers").mkdir(exist_ok=True)
+Path("config").mkdir(exist_ok=True)
 
 
 # --- Lifespan: replaces deprecated @app.on_event("startup") ---
@@ -48,3 +55,8 @@ from fastapi.responses import RedirectResponse
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/home")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
