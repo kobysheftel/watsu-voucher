@@ -74,7 +74,7 @@ class Voucher(Base):
     sequence        = Column(Integer, nullable=False)
 
     # Voucher content
-    voucher_type    = Column(Text, nullable=False)   # ליחיד / לזוג
+    voucher_type    = Column(Text, nullable=False)   # יחיד / זוגי
     valid_until     = Column(Date, nullable=False)
 
     # Timestamps

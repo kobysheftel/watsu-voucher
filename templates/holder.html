@@ -203,13 +203,13 @@
           <div class="mb-3">
             <label class="form-label">סוג שובר *</label>
             <select name="voucher_type" class="form-select" required>
-              <option value="ליחיד">ליחיד</option>
-              <option value="לזוג">לזוג</option>
+              <option value="יחיד">יחיד</option>
+              <option value="זוגי">זוגי</option>
             </select>
           </div>
           <div class="mb-3">
             <label class="form-label">תוקף עד *</label>
-            <input type="date" name="valid_until" class="form-control" min="{{ today }}" required/>
+            <input type="date" name="valid_until" class="form-control" min="{{ today }}" value="{{ default_expiry }}" required/>
           </div>
           <div class="mb-3">
             <label class="form-label">מספר קבלה</label>

@@ -55,7 +55,7 @@ def make_holder(client, mobile="0541234567", name="שרה כהן", email="sara@t
 def make_voucher(client, mobile="0541234567"):
     r = client.post("/vouchers", json={
         "mobile": mobile,
-        "voucher_type": "ליחיד",
+        "voucher_type": "יחיד",
         "valid_until": FUTURE,
     })
     assert r.status_code == 201, r.text
@@ -117,7 +117,7 @@ def test_create_voucher(client):
 def test_create_voucher_no_holder(client):
     r = client.post("/vouchers", json={
         "mobile": "0599999999",
-        "voucher_type": "ליחיד",
+        "voucher_type": "יחיד",
         "valid_until": FUTURE,
     })
     assert r.status_code in (422, 422)   # HTTP_422_UNPROCESSABLE_CONTENT

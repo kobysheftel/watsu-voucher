@@ -75,11 +75,11 @@ def update_holder(db: Session, mobile: str,
     """
     holder = db.get(Holder, mobile)
     if not holder:
-        raise RulesError(f"מחזיק שובר לא נמצא: {mobile}")
+        raise RulesError(f"מזמין לא נמצא: {mobile}")
 
     if not can_edit_holder(db, mobile):
         raise RulesError(
-            "לא ניתן לערוך פרטי מחזיק — קיים שובר מומש על שמו"
+            "לא ניתן לערוך פרטי מזמין — קיים שובר מומש על שמו"
         )
 
     if name is not None:
@@ -119,7 +119,7 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
     """
     holder = db.get(Holder, mobile)
     if not holder:
-        raise RulesError(f"מחזיק שובר לא נמצא: {mobile}")
+        raise RulesError(f"מזמין לא נמצא: {mobile}")
 
     seq = next_sequence(db, mobile)
     voucher_id = f"{mobile}-{seq:03d}"
@@ -153,7 +153,7 @@ def _cement(db: Session, voucher: Voucher) -> None:
     holder = db.get(Holder, voucher.mobile)
     if not holder:
         raise RulesError(
-            f"לא ניתן לצמנט — מחזיק לא נמצא: {voucher.mobile}"
+            f"לא ניתן לצמנט — מזמין לא נמצא: {voucher.mobile}"
         )
 
     voucher.holder_name   = holder.name

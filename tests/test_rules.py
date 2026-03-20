@@ -58,7 +58,7 @@ def test_update_holder(db):
 def test_update_holder_blocked_when_used(db):
     """Holder edit blocked if any voucher is used."""
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     # Force status to used directly (bypassing rules for this test)
     v.status = "used"
     db.commit()
@@ -70,28 +70,28 @@ def test_update_holder_blocked_when_used(db):
 
 def test_create_voucher(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     assert v.voucher_id == f"{MOBILE}-001"
     assert v.sequence == 1
     assert v.status == "draft"
 
 def test_sequence_increments(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v1 = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
-    v2 = rules.create_voucher(db, MOBILE, "לזוג",  FUTURE)
+    v1 = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
+    v2 = rules.create_voucher(db, MOBILE, "זוגי",  FUTURE)
     assert v1.voucher_id == f"{MOBILE}-001"
     assert v2.voucher_id == f"{MOBILE}-002"
 
 def test_create_voucher_no_holder(db):
     with pytest.raises(rules.RulesError, match="לא נמצא"):
-        rules.create_voucher(db, "0599999999", "ליחיד", FUTURE)
+        rules.create_voucher(db, "0599999999", "יחיד", FUTURE)
 
 
 # ── First send ────────────────────────────────────────────────────────────────
 
 def test_first_send_cements_holder(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", "sara@test.com")
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.first_send(db, v.voucher_id, "WA")
 
     assert v.status == "sent"
@@ -103,7 +103,7 @@ def test_first_send_cements_holder(db):
 
 def test_first_send_logs_sending(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.first_send(db, v.voucher_id, "EMAIL", note="נשלח בדוא״ל")
 
     sendings = db.query(Sending).filter_by(voucher_id=v.voucher_id).all()
@@ -113,7 +113,7 @@ def test_first_send_logs_sending(db):
 
 def test_first_send_only_from_draft(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     with pytest.raises(rules.RulesError, match="אינו בטיוטה"):
         rules.first_send(db, v.voucher_id, "WA")   # second call must fail
@@ -121,7 +121,7 @@ def test_first_send_only_from_draft(db):
 def test_cement_survives_holder_edit(db):
     """Editing holder after send must NOT change cemented data."""
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", "sara@test.com")
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.first_send(db, v.voucher_id, "WA")
 
     # Now edit the holder
@@ -137,7 +137,7 @@ def test_cement_survives_holder_edit(db):
 
 def test_resend_logs_new_row(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     rules.resend(db, v.voucher_id, "PRINT", note="הדפסה חוזרת")
 
@@ -147,7 +147,7 @@ def test_resend_logs_new_row(db):
 
 def test_resend_does_not_change_first_sent_at(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.first_send(db, v.voucher_id, "WA")
     first_ts = v.first_sent_at
     rules.resend(db, v.voucher_id, "EMAIL")
@@ -156,13 +156,13 @@ def test_resend_does_not_change_first_sent_at(db):
 
 def test_resend_blocked_on_draft(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     with pytest.raises(rules.RulesError, match="טרם נשלח"):
         rules.resend(db, v.voucher_id, "WA")
 
 def test_resend_blocked_on_used(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     rules.mark_used(db, v.voucher_id)
     with pytest.raises(rules.RulesError, match="מומש"):
@@ -173,7 +173,7 @@ def test_resend_blocked_on_used(db):
 
 def test_mark_used(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     v = rules.mark_used(db, v.voucher_id)
     assert v.status == "used"
@@ -181,13 +181,13 @@ def test_mark_used(db):
 
 def test_mark_used_blocks_draft(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     with pytest.raises(rules.RulesError, match="טיוטה"):
         rules.mark_used(db, v.voucher_id)
 
 def test_mark_used_twice_fails(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     rules.mark_used(db, v.voucher_id)
     with pytest.raises(rules.RulesError, match="כבר מומש"):
@@ -198,7 +198,7 @@ def test_mark_used_twice_fails(db):
 
 def test_update_receipt(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.update_voucher_fields(db, v.voucher_id,
                                     receipt_number="IL-2026-001",
                                     receipt_date=date.today())
@@ -206,7 +206,7 @@ def test_update_receipt(db):
 
 def test_update_receipt_blocked_when_used(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
-    v = rules.create_voucher(db, MOBILE, "ליחיד", FUTURE)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
     rules.mark_used(db, v.voucher_id)
     with pytest.raises(rules.RulesError, match="מומש"):

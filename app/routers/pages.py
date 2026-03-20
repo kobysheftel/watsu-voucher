@@ -17,7 +17,7 @@ All POST handlers use HTML form data (not JSON) and follow POST-Redirect-GET.
 Flash messages are passed as ?flash=...&flash_type=success/danger/warning in the URL.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 from urllib.parse import quote, urlencode
 
@@ -101,7 +101,8 @@ def holder_page(mobile: str, request: Request, db: Session = Depends(get_db)):
         "holder":   holder,
         "can_edit": rules.can_edit_holder(db, mobile),
         "vouchers": holder.vouchers,
-        "today":    date.today().isoformat(),
+        "today":          date.today().isoformat(),
+        "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
     })
 
 

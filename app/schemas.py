@@ -58,7 +58,7 @@ class HolderOut(BaseModel):
 
 # ── Voucher schemas ───────────────────────────────────────────────────────────
 
-VALID_TYPES = {"ליחיד", "לזוג"}
+VALID_TYPES = {"יחיד", "זוגי"}
 
 
 class VoucherCreate(BaseModel):
