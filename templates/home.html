@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}ראשי — גלים ונפש{% endblock %}
 
+{% block extra_css %}
+/* Sortable column headers */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { background: #e9ecef; }
+th.sortable::after { content: ' ⇅'; font-size: .7em; color: #bbb; }
+th.sortable.asc::after { content: ' ▲'; color: #333; }
+th.sortable.desc::after { content: ' ▼'; color: #333; }
+
+/* Column filter inputs */
+.col-filter { font-size: .75rem; padding: 2px 4px; width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+.col-filter:focus { border-color: #86b7fe; outline: none; }
+{% endblock %}
+
 {% block content %}
 
 <!-- Stats row -->
@@ -37,20 +50,26 @@
   </div>
 </div>
 
-<!-- Search form (GET) + New Holder button -->
+<!-- Search form + buttons -->
 <div class="row g-2 mb-4 align-items-center">
   <div class="col">
     <form method="get" action="/home" class="d-flex gap-2">
       <input type="text" name="q" class="form-control form-control-lg"
              value="{{ search_q }}"
-             placeholder="חיפוש לפי שם, טלפון, מייל, מס׳ שובר..."/>
+             placeholder="חיפוש חופשי — שם, טלפון, מייל, מס׳ שובר..."/>
       <button type="submit" class="btn btn-outline-secondary btn-lg">חפש</button>
       {% if search_q %}
       <a href="/home" class="btn btn-outline-danger btn-lg">✕</a>
       {% endif %}
     </form>
   </div>
-  <div class="col-auto">
+  <div class="col-auto d-flex gap-2">
+    {% if all_holders %}
+    <button class="btn btn-success btn-lg"
+            data-bs-toggle="modal" data-bs-target="#newVoucherModal">
+      + שובר חדש
+    </button>
+    {% endif %}
     <button class="btn btn-primary btn-lg"
             data-bs-toggle="modal" data-bs-target="#newHolderModal">
       + מחזיק חדש
@@ -66,19 +85,37 @@
 
   {% if search_results %}
   <div class="table-responsive bg-white shadow-sm rounded">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0" id="resultsTable">
       <thead class="table-light">
         <tr>
-          <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
-          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th></th>
+          <th class="sortable" data-col="0">מס׳ שובר</th>
+          <th class="sortable" data-col="1">שם</th>
+          <th class="sortable" data-col="2">טלפון</th>
+          <th class="sortable" data-col="3">מייל</th>
+          <th class="sortable" data-col="4">סוג</th>
+          <th class="sortable" data-col="5">סטטוס</th>
+          <th class="sortable" data-col="6">תוקף עד</th>
+          <th></th>
+        </tr>
+        <!-- Column filters -->
+        <tr class="filter-row">
+          <th><input class="col-filter" data-col="0" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="1" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="2" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="3" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="4" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="5" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="6" placeholder="סנן..."/></th>
+          <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)">✕</button></th>
         </tr>
       </thead>
       <tbody>
         {% for v in search_results %}
         <tr>
           <td class="font-monospace small">{{ v.voucher_id }}</td>
-          <td>{{ v.holder_name or (v.holder_ref.name if v.holder_ref else '—') }}</td>
-          <td>{{ v.mobile }}</td>
+          <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none">{{ v.holder_name or (v.holder_ref.name if v.holder_ref else '—') }}</a></td>
+          <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none text-muted">{{ v.mobile }}</a></td>
+          <td class="small">{{ v.holder_email or (v.holder_ref.email if v.holder_ref else '') or '' }}</td>
           <td>{{ v.voucher_type }}</td>
           <td>
             {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
@@ -86,9 +123,11 @@
             {% else %}<span class="badge-used">מומש</span>{% endif %}
           </td>
           <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
-          <td>
+          <td class="text-nowrap">
             <a href="/vouchers/{{ v.voucher_id }}/view"
                class="btn btn-outline-primary btn-sm">פתח</a>
+            <a href="/holders/{{ v.mobile }}/view"
+               class="btn btn-outline-success btn-sm">+ שובר</a>
           </td>
         </tr>
         {% endfor %}
@@ -97,26 +136,54 @@
   </div>
 
   {% else %}
-  <div class="text-center text-muted py-4">לא נמצאו תוצאות</div>
+  <!-- No results — smart offer to create holder -->
+  <div class="text-center py-4">
+    <div class="text-muted mb-3">לא נמצאו תוצאות עבור "{{ search_q }}"</div>
+    <button class="btn btn-primary"
+            data-bs-toggle="modal" data-bs-target="#newHolderModal"
+            onclick="prefillHolder('{{ search_q }}')">
+      + צור מחזיק חדש עם "{{ search_q }}"
+    </button>
+  </div>
   {% endif %}
 
 <!-- Recent vouchers (shown when no search) -->
 {% else %}
   <h6 class="text-muted mb-2">שוברים אחרונים</h6>
   <div class="table-responsive bg-white shadow-sm rounded">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0" id="recentTable">
       <thead class="table-light">
         <tr>
-          <th>מס׳ שובר</th><th>שם</th><th>טלפון</th>
-          <th>סוג</th><th>סטטוס</th><th>תוקף עד</th><th>הונפק</th><th></th>
+          <th class="sortable" data-col="0">מס׳ שובר</th>
+          <th class="sortable" data-col="1">שם</th>
+          <th class="sortable" data-col="2">טלפון</th>
+          <th class="sortable" data-col="3">מייל</th>
+          <th class="sortable" data-col="4">סוג</th>
+          <th class="sortable" data-col="5">סטטוס</th>
+          <th class="sortable" data-col="6">תוקף עד</th>
+          <th class="sortable" data-col="7">הונפק</th>
+          <th></th>
+        </tr>
+        <!-- Column filters -->
+        <tr class="filter-row">
+          <th><input class="col-filter" data-col="0" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="1" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="2" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="3" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="4" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="5" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="6" placeholder="סנן..."/></th>
+          <th><input class="col-filter" data-col="7" placeholder="סנן..."/></th>
+          <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)">✕</button></th>
         </tr>
       </thead>
       <tbody>
         {% for v in recent %}
         <tr>
           <td class="font-monospace small">{{ v.voucher_id }}</td>
-          <td>{{ v.holder_name or '—' }}</td>
-          <td>{{ v.mobile }}</td>
+          <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none">{{ v.holder_name or '—' }}</a></td>
+          <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none text-muted">{{ v.mobile }}</a></td>
+          <td class="small">{{ v.holder_email or '' }}</td>
           <td>{{ v.voucher_type }}</td>
           <td>
             {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
@@ -125,14 +192,16 @@
           </td>
           <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
           <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
-          <td>
+          <td class="text-nowrap">
             <a href="/vouchers/{{ v.voucher_id }}/view"
                class="btn btn-outline-primary btn-sm">פתח</a>
+            <a href="/holders/{{ v.mobile }}/view"
+               class="btn btn-outline-success btn-sm">+ שובר</a>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">
+          <td colspan="9" class="text-center text-muted py-4">
             אין שוברים עדיין —
             <button class="btn btn-link p-0"
                     data-bs-toggle="modal" data-bs-target="#newHolderModal">
@@ -147,7 +216,7 @@
 {% endif %}
 
 
-<!-- ── New Holder Modal (form POSTs to Python) ─────────────────────────── -->
+<!-- ── New Holder Modal ─────────────────────────────────────────────────── -->
 <div class="modal fade" id="newHolderModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -159,17 +228,17 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">טלפון נייד *</label>
-            <input type="text" name="mobile" class="form-control"
+            <input type="text" name="mobile" id="holder_mobile" class="form-control"
                    placeholder="0541234567" maxlength="10" required/>
             <div class="form-text">10 ספרות, מתחיל ב-05</div>
           </div>
           <div class="mb-3">
             <label class="form-label">שם מלא *</label>
-            <input type="text" name="name" class="form-control" required/>
+            <input type="text" name="name" id="holder_name" class="form-control" required/>
           </div>
           <div class="mb-3">
             <label class="form-label">אימייל</label>
-            <input type="email" name="email" class="form-control"/>
+            <input type="email" name="email" id="holder_email" class="form-control"/>
           </div>
         </div>
         <div class="modal-footer">
@@ -180,5 +249,159 @@
     </div>
   </div>
 </div>
+
+
+<!-- ── New Voucher Modal (pick existing holder) ──────────────────────────── -->
+{% if all_holders %}
+<div class="modal fade" id="newVoucherModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">שובר חדש</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/form/vouchers/new">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">בחר מחזיק *</label>
+            <select name="mobile" class="form-select" required>
+              {% for h in all_holders %}
+              <option value="{{ h.mobile }}">{{ h.name }} ({{ h.mobile }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">סוג שובר *</label>
+            <select name="voucher_type" class="form-select" required>
+              <option value="ליחיד">ליחיד</option>
+              <option value="לזוג">לזוג</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">תוקף עד *</label>
+            <input type="date" name="valid_until" class="form-control" min="{{ today }}" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">מספר קבלה</label>
+            <input type="text" name="receipt_number" class="form-control"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">תאריך קבלה</label>
+            <input type="date" name="receipt_date" class="form-control"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">הערות</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-success">צור שובר</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ── JavaScript: smart prefill, sorting, column filters ────────────────── -->
+<script>
+// Smart prefill: detect if search text is phone, email, or name
+function prefillHolder(text) {
+  text = text.trim();
+  var mobileField = document.getElementById('holder_mobile');
+  var nameField   = document.getElementById('holder_name');
+  var emailField  = document.getElementById('holder_email');
+
+  // Reset all fields
+  mobileField.value = '';
+  nameField.value = '';
+  emailField.value = '';
+
+  // Phone: starts with 05 and all digits
+  if (/^05\d{7,8}$/.test(text.replace(/[\s\-]/g, ''))) {
+    mobileField.value = text.replace(/[\s\-]/g, '');
+  }
+  // Email: contains @
+  else if (text.includes('@')) {
+    emailField.value = text;
+  }
+  // Otherwise: treat as name
+  else {
+    nameField.value = text;
+  }
+}
+
+// ── Column sorting ──
+document.querySelectorAll('th.sortable').forEach(function(th) {
+  th.addEventListener('click', function() {
+    var table = th.closest('table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    var col = parseInt(th.dataset.col);
+    var asc = !th.classList.contains('asc');
+
+    // Reset all sort indicators in this table
+    table.querySelectorAll('th.sortable').forEach(function(h) {
+      h.classList.remove('asc', 'desc');
+    });
+    th.classList.add(asc ? 'asc' : 'desc');
+
+    rows.sort(function(a, b) {
+      var aText = (a.cells[col] ? a.cells[col].textContent.trim() : '');
+      var bText = (b.cells[col] ? b.cells[col].textContent.trim() : '');
+      // Try numeric sort first
+      var aNum = parseFloat(aText.replace(/[^\d.-]/g, ''));
+      var bNum = parseFloat(bText.replace(/[^\d.-]/g, ''));
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return asc ? aNum - bNum : bNum - aNum;
+      }
+      return asc ? aText.localeCompare(bText, 'he') : bText.localeCompare(aText, 'he');
+    });
+
+    rows.forEach(function(row) { tbody.appendChild(row); });
+  });
+});
+
+// ── Column filters ──
+document.querySelectorAll('.col-filter').forEach(function(input) {
+  input.addEventListener('input', function() {
+    var table = input.closest('table');
+    applyFilters(table);
+  });
+});
+
+function applyFilters(table) {
+  var filters = {};
+  table.querySelectorAll('.col-filter').forEach(function(input) {
+    var col = parseInt(input.dataset.col);
+    var val = input.value.trim().toLowerCase();
+    if (val) filters[col] = val;
+  });
+
+  table.querySelectorAll('tbody tr').forEach(function(row) {
+    var show = true;
+    for (var col in filters) {
+      var cell = row.cells[col];
+      if (cell && cell.textContent.toLowerCase().indexOf(filters[col]) === -1) {
+        show = false;
+        break;
+      }
+    }
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+function clearFilters(btn) {
+  var table = btn.closest('table');
+  table.querySelectorAll('.col-filter').forEach(function(input) {
+    input.value = '';
+  });
+  table.querySelectorAll('tbody tr').forEach(function(row) {
+    row.style.display = '';
+  });
+}
+</script>
 
 {% endblock %}

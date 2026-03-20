@@ -270,4 +270,32 @@
 </div>
 {% endif %}
 
+<!-- Auto-open WhatsApp after send/resend via WA -->
+{% set wa_mobile = request.query_params.get('wa_open') %}
+{% if wa_mobile %}
+<div class="modal fade show" id="waModal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.5);">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title">📱 פתח וואטסאפ</h5>
+      </div>
+      <div class="modal-body text-center">
+        <p class="mb-3">השובר נשלח בהצלחה! לחץ לפתיחת וואטסאפ:</p>
+        <a href="https://wa.me/972{{ wa_mobile[1:] }}?text={{ 'שלום, שלחתי לך שובר מתנה מגלים ונפש 🌊' | urlencode }}"
+           target="_blank"
+           class="btn btn-success btn-lg">
+          📱 פתח וואטסאפ
+        </a>
+        <p class="text-muted small mt-3">
+          💡 אחרי פתיחת הצ׳אט, צרף את קובץ ה-PDF ידנית
+        </p>
+      </div>
+      <div class="modal-footer">
+        <a href="/vouchers/{{ voucher.voucher_id }}/view" class="btn btn-secondary">סגור</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

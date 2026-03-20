@@ -63,16 +63,21 @@ def home_page(
     search_results = None
 
     if q:
-        # Server-side search across all relevant fields
+        # Server-side free-text search across all relevant fields
+        # Also matches voucher ID suffix (e.g. "001" matches "0541234567-001")
         term = f"%{q}%"
+        suffix_term = f"%-{q}" if not q.startswith("-") else f"%{q}"
         search_results = (
             db.query(Voucher)
             .outerjoin(Holder, Holder.mobile == Voucher.mobile)
             .filter(or_(
                 Voucher.voucher_id.ilike(term),
+                Voucher.voucher_id.ilike(suffix_term),
                 Voucher.holder_name.ilike(term),
                 Voucher.holder_mobile.ilike(term),
                 Voucher.holder_email.ilike(term),
+                Voucher.receipt_number.ilike(term),
+                Voucher.notes.ilike(term),
                 Holder.name.ilike(term),
                 Holder.mobile.ilike(term),
                 Holder.email.ilike(term),
@@ -88,6 +93,9 @@ def home_page(
             .all()
         )
 
+    # All holders — for the "new voucher" modal dropdown
+    all_holders = db.query(Holder).order_by(Holder.name).all()
+
     return templates.TemplateResponse("home.html", {
         "request":        request,
         "stats":          {"total": total, "draft": drafts, "sent": sent,
@@ -95,6 +103,8 @@ def home_page(
         "recent":         recent,
         "search_q":       q or "",
         "search_results": search_results,
+        "all_holders":    all_holders,
+        "today":          date.today().isoformat(),
     })
 
 
@@ -112,6 +122,7 @@ def holder_page(mobile: str, request: Request, db: Session = Depends(get_db)):
         "holder":   holder,
         "can_edit": rules.can_edit_holder(db, mobile),
         "vouchers": holder.vouchers,
+        "today":    date.today().isoformat(),
     })
 
 
@@ -227,11 +238,16 @@ async def form_create_voucher(
 ):
     """Create a draft voucher and redirect to its detail page."""
     try:
+        parsed_date = date.fromisoformat(valid_until)
+        if parsed_date < date.today():
+            return _flash(f"/holders/{mobile}/view",
+                          "תאריך תוקף לא יכול להיות בעבר", "danger")
+
         v = rules.create_voucher(
             db,
             mobile       = mobile,
             voucher_type = voucher_type,
-            valid_until  = date.fromisoformat(valid_until),
+            valid_until  = parsed_date,
             receipt_number = receipt_number or None,
             receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
             notes          = notes or None,
@@ -263,6 +279,19 @@ async def form_send_voucher(
         else:
             rules.resend(db, voucher_id, sent_via, note or None)
             msg = "השובר נשלח מחדש"
+
+        # Refresh voucher to get cemented mobile
+        db.refresh(voucher)
+
+        # For WhatsApp: redirect to voucher page with wa_open flag
+        # so the browser opens wa.me automatically
+        if sent_via == "WA":
+            mobile = voucher.holder_mobile or voucher.mobile
+            return _flash(
+                f"/vouchers/{voucher_id}/view?wa_open={mobile}",
+                msg,
+            )
+
         return _flash(f"/vouchers/{voucher_id}/view", msg)
     except rules.RulesError as e:
         return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
