@@ -4,8 +4,8 @@ PDF module — reportlab-based voucher PDF generation with Hebrew support.
 Uses reportlab directly (not xhtml2pdf) because xhtml2pdf cannot render
 Hebrew glyphs. The bidi library handles RTL text reordering.
 
-Design: A5 portrait voucher with double border, pool image, QR code,
-holder details, and validity info — all on a single page.
+Design matches the reference: water-blue gradient background, centered
+pool photo, warm teal text, treatment info, contact, expiry.
 """
 
 from pathlib import Path
@@ -13,7 +13,7 @@ from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import mm
-from reportlab.lib.colors import HexColor
+from reportlab.lib.colors import HexColor, Color
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -22,16 +22,17 @@ from bidi.algorithm import get_display
 # A5 dimensions
 _W, _H = A5   # 148mm x 210mm (≈ 419 x 595 pts)
 
-# Margins
-_M = 8 * mm
-
-# Colors
-_GOLD    = HexColor("#8B7355")
-_DARK    = HexColor("#2c3e50")
-_GREY    = HexColor("#888888")
-_LGREY   = HexColor("#aaaaaa")
-_RED     = HexColor("#c0392b")
-_DIVIDER = HexColor("#dddddd")
+# Colors — matching the water/teal design
+_TEAL      = HexColor("#2a7f8e")    # main title color
+_TEAL_DARK = HexColor("#1a5f6e")    # darker teal for emphasis
+_WARM      = HexColor("#5a4a3a")    # warm brown for body text
+_GREY      = HexColor("#666666")    # secondary text
+_LGREY     = HexColor("#999999")    # light info text
+_BG_TOP    = HexColor("#d4eef2")    # light water blue (top)
+_BG_MID    = HexColor("#e8f4f0")    # very light (middle)
+_BG_BOT    = HexColor("#dce8e4")    # soft sage (bottom)
+_WHITE     = HexColor("#ffffff")
+_ORNAMENT  = HexColor("#7ab5b0")    # decorative elements
 
 # Assets
 _POOL_IMAGE = Path("assets/Pool.png")
@@ -57,8 +58,7 @@ def _has_hebrew(text: str) -> bool:
 
 
 def _bidi(text: str) -> str:
-    """Apply bidi algorithm for correct RTL display in PDF.
-    Only applies to text containing Hebrew — pure LTR text is left as-is."""
+    """Apply bidi algorithm for correct RTL display in PDF."""
     if not text:
         return ""
     text = str(text)
@@ -69,8 +69,10 @@ def _bidi(text: str) -> str:
 
 def _draw_centered(c: canvas.Canvas, text: str, y: float,
                    font: str = "Heebo", size: float = 11,
-                   color=_DARK):
+                   color=None):
     """Draw bidi-processed text centered on the page."""
+    if color is None:
+        color = _WARM
     c.setFont(font, size)
     c.setFillColor(color)
     display_text = _bidi(text)
@@ -79,38 +81,78 @@ def _draw_centered(c: canvas.Canvas, text: str, y: float,
     c.drawString(x, y, display_text)
 
 
-def _draw_right(c: canvas.Canvas, text: str, x: float, y: float,
-                font: str = "Heebo", size: float = 11,
-                color=_DARK):
-    """Draw bidi-processed text right-aligned at x."""
-    c.setFont(font, size)
-    c.setFillColor(color)
-    display_text = _bidi(text)
-    text_width = c.stringWidth(display_text, font, size)
-    c.drawString(x - text_width, y, display_text)
+def _draw_gradient_bg(c: canvas.Canvas):
+    """Draw a soft water-blue gradient background using horizontal bands."""
+    steps = 40
+    band_h = _H / steps
+    for i in range(steps):
+        # Blend from BG_TOP (top) through BG_MID to BG_BOT (bottom)
+        t = i / steps
+        if t < 0.4:
+            # Top zone: BG_TOP → BG_MID
+            f = t / 0.4
+            r = _BG_TOP.red   + (_BG_MID.red   - _BG_TOP.red)   * f
+            g = _BG_TOP.green + (_BG_MID.green  - _BG_TOP.green) * f
+            b = _BG_TOP.blue  + (_BG_MID.blue   - _BG_TOP.blue)  * f
+        else:
+            # Bottom zone: BG_MID → BG_BOT
+            f = (t - 0.4) / 0.6
+            r = _BG_MID.red   + (_BG_BOT.red   - _BG_MID.red)   * f
+            g = _BG_MID.green + (_BG_BOT.green  - _BG_MID.green) * f
+            b = _BG_MID.blue  + (_BG_BOT.blue   - _BG_MID.blue)  * f
+        c.setFillColor(Color(r, g, b))
+        c.rect(0, _H - (i + 1) * band_h, _W, band_h + 1, stroke=0, fill=1)
 
 
-def _hline(c: canvas.Canvas, y: float, color=_DIVIDER, width: float = 0.5):
-    """Draw a horizontal divider line."""
+def _draw_wave_decoration(c: canvas.Canvas, y: float, color=None):
+    """Draw a simple wave-like decorative line."""
+    if color is None:
+        color = _ORNAMENT
     c.setStrokeColor(color)
-    c.setLineWidth(width)
-    c.line(_M + 5 * mm, y, _W - _M - 5 * mm, y)
+    c.setLineWidth(1.5)
+    # Draw a wavy line using bezier curves
+    margin = 20 * mm
+    mid = _W / 2
+    p = c.beginPath()
+    p.moveTo(margin, y)
+    p.curveTo(margin + 20 * mm, y + 3 * mm, mid - 15 * mm, y - 3 * mm, mid, y)
+    p.curveTo(mid + 15 * mm, y + 3 * mm, _W - margin - 20 * mm, y - 3 * mm, _W - margin, y)
+    c.drawPath(p, stroke=1, fill=0)
+
+
+def _draw_ornament(c: canvas.Canvas, y: float):
+    """Draw a small centered ornamental divider (like ❧ or ✦)."""
+    c.setFillColor(_ORNAMENT)
+    c.setFont("Heebo", 12)
+    ornament = "✦"
+    w = c.stringWidth(ornament, "Heebo", 12)
+    c.drawString((_W - w) / 2, y, ornament)
+    # Small lines on each side
+    c.setStrokeColor(_ORNAMENT)
+    c.setLineWidth(0.5)
+    line_len = 15 * mm
+    gap = 4 * mm
+    c.line(_W / 2 - gap - line_len, y + 4, _W / 2 - gap, y + 4)
+    c.line(_W / 2 + gap, y + 4, _W / 2 + gap + line_len, y + 4)
 
 
 def generate_pdf(voucher, folder: Path) -> Path:
     """
-    Generate a single-page A5 voucher PDF using reportlab.
+    Generate a single-page A5 voucher PDF matching the water-blue design.
 
     Layout (top to bottom):
-      - Business name + subtitle
-      - "שובר מתנה" title
-      - Voucher type (large, gold)
-      - Divider
-      - Holder details (name, phone, email) — right-aligned labels
-      - Divider
-      - Pool image (center) + QR code (bottom-right)
-      - Validity date (red, centered)
-      - Voucher ID + receipt number (small, centered)
+      - Water-blue gradient background
+      - "גלים ונפש" header in teal
+      - "טיפולי וואטסו" subtitle
+      - Wave decoration
+      - Pool photo (oval/rounded, centered)
+      - "!איזה כיף קיבלת שובר מתנה" excitement title
+      - "טיפול וואטסו {type}" voucher type
+      - Ornamental divider
+      - Treatment description text
+      - Contact info
+      - Expiry date
+      - Small voucher ID + receipt number
 
     Returns the saved PDF path.
     """
@@ -119,129 +161,106 @@ def generate_pdf(voucher, folder: Path) -> Path:
     pdf_path = folder / "voucher.pdf"
     c = canvas.Canvas(str(pdf_path), pagesize=A5)
 
-    # ── Double border frame ──
-    # Outer border
-    c.setStrokeColor(_GOLD)
-    c.setLineWidth(2)
-    c.rect(_M, _M, _W - 2 * _M, _H - 2 * _M)
-    # Inner border (2pt inset)
-    c.setLineWidth(0.5)
-    c.rect(_M + 3, _M + 3, _W - 2 * _M - 6, _H - 2 * _M - 6)
+    # ── Background gradient ──
+    _draw_gradient_bg(c)
 
     # ── Starting Y position (from top) ──
-    y = _H - _M - 15 * mm
+    y = _H - 18 * mm
 
-    # ── Business name ──
-    _draw_centered(c, "גלים ונפש", y, size=22, color=_GOLD)
-    y -= 5 * mm
+    # ── Business name: "גלים ונפש" ──
+    _draw_centered(c, "גלים ונפש", y, size=26, color=_TEAL)
+    y -= 7 * mm
 
     # ── Subtitle ──
-    _draw_centered(c, "ווטסו — טיפול במים חמים", y, size=9, color=_GREY)
-    y -= 3 * mm
+    _draw_centered(c, "טיפולי וואטסו", y, size=13, color=_TEAL_DARK)
+    y -= 6 * mm
 
-    # ── Divider under header ──
-    _hline(c, y, color=_GOLD, width=0.8)
-    y -= 7 * mm
-
-    # ── Gift voucher title ──
-    _draw_centered(c, "שובר מתנה", y, size=15, color=_DARK)
+    # ── Wave decoration ──
+    _draw_wave_decoration(c, y)
     y -= 8 * mm
 
-    # ── Voucher type (large, gold) ──
-    _draw_centered(c, voucher.voucher_type, y, size=22, color=_GOLD)
-    y -= 5 * mm
+    # ── Pool photo (centered, with rounded clip simulation) ──
+    pool_w = 55 * mm
+    pool_h = 40 * mm
 
-    # ── Divider ──
-    _hline(c, y)
+    if _POOL_IMAGE.exists():
+        pool_x = (_W - pool_w) / 2
+        pool_y = y - pool_h
+        try:
+            # Draw a white rounded rect behind the image for a "frame" effect
+            c.setFillColor(_WHITE)
+            c.setStrokeColor(_ORNAMENT)
+            c.setLineWidth(1.5)
+            c.roundRect(pool_x - 2, pool_y - 2, pool_w + 4, pool_h + 4,
+                        8 * mm, stroke=1, fill=1)
+
+            img = ImageReader(str(_POOL_IMAGE))
+            # Clip to rounded rect
+            c.saveState()
+            clip_path = c.beginPath()
+            clip_path.roundRect(pool_x, pool_y, pool_w, pool_h, 7 * mm)
+            c.clipPath(clip_path, stroke=0)
+            c.drawImage(img, pool_x, pool_y, pool_w, pool_h,
+                        preserveAspectRatio=True, mask='auto')
+            c.restoreState()
+        except Exception:
+            pass
+
+    y -= pool_h + 8 * mm
+
+    # ── Excitement title ──
+    _draw_centered(c, "איזה כיף קיבלת שובר מתנה", y, size=16, color=_TEAL)
     y -= 7 * mm
 
-    # ── Holder details (RTL layout: label on right edge, value to its left) ──
-    label_x = _W - _M - 10 * mm   # right edge for label text (right-aligned)
-    gap = 3 * mm                   # space between label and value
+    # ── Voucher type ──
+    type_text = f"טיפול וואטסו {voucher.voucher_type}"
+    _draw_centered(c, type_text, y, size=13, color=_TEAL_DARK)
+    y -= 7 * mm
 
-    def _detail_row(label_text, value_text, value_size=12):
-        """Draw a label: value row, RTL. Returns nothing, caller manages y."""
-        # Label (small, grey, right-aligned)
-        c.setFont("Heebo", 8)
-        c.setFillColor(_LGREY)
-        label_display = _bidi(label_text)
-        label_w = c.stringWidth(label_display, "Heebo", 8)
-        c.drawString(label_x - label_w, y, label_display)
+    # ── Ornamental divider ──
+    _draw_ornament(c, y)
+    y -= 8 * mm
 
-        # Value (bold, dark, positioned left of label)
-        c.setFont("Heebo", value_size)
-        c.setFillColor(_DARK)
-        value_display = _bidi(value_text)
-        value_w = c.stringWidth(value_display, "Heebo", value_size)
-        c.drawString(label_x - label_w - gap - value_w, y, value_display)
+    # ── Description text (treatment info) ──
+    desc_lines = [
+        "וואטסו במים בבריכה חמימה בחצר מקורה ושקטה",
+        "מומלץ לבוא בבגד ים, להביא מגבות ובגדים להחלפה",
+        "הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים",
+    ]
+    for line in desc_lines:
+        _draw_centered(c, line, y, size=9, color=_WARM)
+        y -= 4.5 * mm
 
-    # Name
-    _detail_row("מוענק ל:", voucher.holder_name or "")
-    y -= 5.5 * mm
+    y -= 3 * mm
 
-    # Phone
-    _detail_row("טלפון:", voucher.holder_mobile or "")
-    y -= 5.5 * mm
-
-    # Email (if exists)
-    if voucher.holder_email:
-        _detail_row("מייל:", voucher.holder_email, value_size=9)
-        y -= 5.5 * mm
-
-    y -= 2 * mm
-
-    # ── Divider ──
-    _hline(c, y)
+    # ── Contact info ──
+    _draw_centered(c, "למימוש ותיאום תאריך", y, size=10, color=_GREY)
     y -= 5 * mm
+    _draw_centered(c, "אביגל 050-4014696", y, size=11, color=_TEAL_DARK)
+    y -= 8 * mm
 
-    # ── Pool image + QR code ──
-    pool_img_h = 45 * mm
-    pool_img_w = 55 * mm
-    qr_size = 25 * mm
+    # ── Expiry date ──
+    valid_str = voucher.valid_until.strftime('%d/%m/%Y')
+    _draw_centered(c, f"השובר בתוקף עד {valid_str}", y, size=11, color=_WARM)
+    y -= 6 * mm
 
-    # Pool image — centered horizontally, shifted left to make room for QR
-    if _POOL_IMAGE.exists():
-        pool_x = (_W - pool_img_w) / 2 - 10 * mm
-        pool_y = y - pool_img_h
-        try:
-            img = ImageReader(str(_POOL_IMAGE))
-            c.drawImage(img, pool_x, pool_y, pool_img_w, pool_img_h,
-                        preserveAspectRatio=True, mask='auto')
-        except Exception:
-            pass  # skip if image can't be loaded
-
-    # QR code — bottom-right area
+    # ── QR code (if exists) — small, centered ──
     if voucher.qr_path and Path(voucher.qr_path).exists():
-        qr_x = _W - _M - 12 * mm - qr_size
-        qr_y = y - pool_img_h + 2 * mm
+        qr_size = 18 * mm
+        qr_x = (_W - qr_size) / 2
+        qr_y = y - qr_size
         try:
             qr_img = ImageReader(str(voucher.qr_path))
             c.drawImage(qr_img, qr_x, qr_y, qr_size, qr_size)
         except Exception:
             pass
+        y -= qr_size + 3 * mm
 
-        # "סרוק לאימות" under QR
-        c.setFont("Heebo", 5)
-        c.setFillColor(_LGREY)
-        label = _bidi("סרוק לאימות")
-        lw = c.stringWidth(label, "Heebo", 5)
-        c.drawString(qr_x + (qr_size - lw) / 2, qr_y - 3 * mm, label)
-
-    y -= pool_img_h + 5 * mm
-
-    # ── Validity date (red, centered) ──
-    valid_str = voucher.valid_until.strftime('%d/%m/%Y')
-    _draw_centered(c, f"בתוקף עד: {valid_str}", y, size=11, color=_RED)
-    y -= 5 * mm
-
-    # ── Voucher ID (small, centered) ──
-    _draw_centered(c, f"מס׳ שובר: {voucher.voucher_id}", y, size=7, color=_LGREY)
-    y -= 3.5 * mm
-
-    # ── Receipt number (if exists) ──
+    # ── Voucher ID + receipt (tiny, bottom) ──
+    _draw_centered(c, f"מס׳ שובר: {voucher.voucher_id}", y, size=6, color=_LGREY)
+    y -= 3 * mm
     if voucher.receipt_number:
-        _draw_centered(c, f"מס׳ קבלה: {voucher.receipt_number}", y,
-                        size=7, color=_LGREY)
+        _draw_centered(c, f"מס׳ קבלה: {voucher.receipt_number}", y, size=6, color=_LGREY)
 
     c.save()
     return pdf_path
