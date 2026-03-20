@@ -5,9 +5,11 @@
   <style>
     /* xhtml2pdf-compatible styles — no flexbox, no grid, use tables */
     @page {
-      size: 148mm 210mm;   /* A5 portrait */
+      size: A5 portrait;
       margin: 8mm;
     }
+
+    /* Heebo font is registered via Python (reportlab) — no @font-face needed */
 
     * {
       margin: 0;
@@ -16,7 +18,7 @@
     }
 
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Heebo', Arial, sans-serif;
       direction: rtl;
       unicode-bidi: embed;
       font-size: 11pt;
@@ -26,16 +28,15 @@
     /* Outer voucher frame */
     .voucher {
       border: 3px double #8B7355;
-      padding: 8mm 7mm;
-      height: 190mm;
+      padding: 6mm 7mm;
     }
 
     /* Business name header */
     .header {
       text-align: center;
       border-bottom: 1px solid #8B7355;
-      padding-bottom: 5pt;
-      margin-bottom: 6pt;
+      padding-bottom: 4pt;
+      margin-bottom: 4pt;
     }
     .business-name {
       font-size: 20pt;
@@ -49,68 +50,70 @@
 
     /* Gift voucher title */
     .gift-title {
-      font-size: 16pt;
+      font-size: 14pt;
       font-weight: bold;
       text-align: center;
       color: #2c3e50;
-      margin: 5pt 0 3pt 0;
+      margin: 3pt 0 2pt 0;
     }
 
     /* Voucher type — large display */
     .voucher-type {
-      font-size: 22pt;
+      font-size: 20pt;
       font-weight: bold;
       color: #8B7355;
       text-align: center;
-      margin: 4pt 0;
+      margin: 2pt 0;
     }
 
     .divider {
       border-top: 1px solid #ddd;
-      margin: 5pt 0;
+      margin: 3pt 0;
     }
 
     /* Holder detail rows */
     .detail-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 4pt 0;
+      margin: 2pt 0;
     }
     .detail-label {
       font-size: 8pt;
       color: #999;
-      width: 22%;
-      padding: 2pt 0;
+      width: 18%;
+      padding: 1pt 0;
+      vertical-align: middle;
     }
     .detail-value {
-      font-size: 11pt;
+      font-size: 10pt;
       font-weight: bold;
       color: #2c3e50;
-      padding: 2pt 4pt;
+      padding: 1pt 4pt;
+      vertical-align: middle;
     }
 
     /* Bottom section: pool image + QR side by side */
     .bottom-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 5pt;
+      margin-top: 3pt;
     }
     .pool-cell {
       text-align: center;
       vertical-align: middle;
     }
     .pool-img {
-      width: 55mm;
+      width: 50mm;
       height: auto;
     }
     .qr-cell {
       text-align: center;
       vertical-align: bottom;
-      width: 32mm;
+      width: 30mm;
     }
     .qr-img {
-      width: 28mm;
-      height: 28mm;
+      width: 25mm;
+      height: 25mm;
     }
 
     /* Footer info */
@@ -119,13 +122,13 @@
       color: #c0392b;
       font-weight: bold;
       text-align: center;
-      margin-top: 5pt;
+      margin-top: 3pt;
     }
     .voucher-id-line {
       font-size: 7pt;
       color: #aaa;
       text-align: center;
-      margin-top: 3pt;
+      margin-top: 2pt;
     }
     .receipt-line {
       font-size: 7pt;
@@ -180,7 +183,7 @@
       <td class="qr-cell">
         {% if qr_image_b64 %}
         <img src="data:image/png;base64,{{ qr_image_b64 }}" class="qr-img" />
-        <div style="font-size:6pt; color:#999; margin-top:2pt;">סרוק לאימות</div>
+        <div style="font-size:6pt; color:#999; margin-top:1pt;">סרוק לאימות</div>
         {% endif %}
       </td>
     </tr>

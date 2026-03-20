@@ -15,8 +15,11 @@ jinja2>=3.1.4
 # Form data parsing (required by FastAPI for HTML forms)
 python-multipart>=0.0.12
 
-# PDF generation (Windows-compatible, no GTK needed)
-xhtml2pdf>=0.2.16
+# PDF generation (reportlab directly — xhtml2pdf can't render Hebrew)
+reportlab>=4.0
+
+# RTL/bidi text support for Hebrew in PDF
+python-bidi>=0.6.0
 
 # QR code generation
 qrcode>=8.0
