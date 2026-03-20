@@ -11,7 +11,7 @@
   </ol>
 </nav>
 
-<!-- Holder info card -->
+<!-- Orderer info card -->
 <div class="row g-3 mb-4">
   <div class="col-md-8">
     <div class="card shadow-sm">
@@ -65,14 +65,19 @@
   </div>
 </div>
 
-<!-- Vouchers table -->
+<!-- Vouchers table with inline actions -->
 {% if vouchers %}
 <div class="table-responsive bg-white shadow-sm rounded">
   <table class="table table-hover mb-0">
     <thead class="table-light">
       <tr>
-        <th>מס׳ שובר</th><th>סוג</th><th>סטטוס</th>
-        <th>תוקף עד</th><th>מס׳ קבלה</th><th>הונפק</th><th></th>
+        <th>מס׳ שובר</th>
+        <th>סוג</th>
+        <th>סטטוס</th>
+        <th>תוקף עד</th>
+        <th>מס׳ קבלה</th>
+        <th>הונפק</th>
+        <th>פעולות</th>
       </tr>
     </thead>
     <tbody>
@@ -88,9 +93,51 @@
         <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
         <td>{{ v.receipt_number or '—' }}</td>
         <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
-        <td>
+        <td class="text-nowrap">
+          <!-- View voucher detail -->
           <a href="/vouchers/{{ v.voucher_id }}/view"
-             class="btn btn-outline-primary btn-sm">פתח</a>
+             class="btn btn-outline-primary btn-sm" title="הצג שובר">📄</a>
+
+          {% if v.status == 'draft' %}
+          <!-- First send options -->
+          <button class="btn btn-outline-success btn-sm send-btn" title="שלח"
+                  data-voucher="{{ v.voucher_id }}" data-action="send">📤</button>
+
+          {% elif v.status == 'sent' %}
+          <!-- Download/print PDF -->
+          {% if v.pdf_path %}
+          <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank"
+             class="btn btn-outline-secondary btn-sm" title="הורד PDF">🖨️</a>
+          {% endif %}
+
+          <!-- Resend via WhatsApp -->
+          <form method="post" action="/form/vouchers/{{ v.voucher_id }}/send"
+                style="display:inline;">
+            <input type="hidden" name="sent_via" value="WA"/>
+            <button type="submit" class="btn btn-outline-success btn-sm" title="שלח בווטסאפ">📱</button>
+          </form>
+
+          <!-- Resend via Email -->
+          <form method="post" action="/form/vouchers/{{ v.voucher_id }}/send"
+                style="display:inline;">
+            <input type="hidden" name="sent_via" value="EMAIL"/>
+            <button type="submit" class="btn btn-outline-info btn-sm" title="שלח במייל">📧</button>
+          </form>
+
+          <!-- Mark used -->
+          <form method="post" action="/form/vouchers/{{ v.voucher_id }}/use"
+                style="display:inline;"
+                onsubmit="return confirm('סמן שובר כמומש? פעולה זו בלתי הפיכה.');">
+            <button type="submit" class="btn btn-outline-warning btn-sm" title="סמן כמומש">✅</button>
+          </form>
+
+          {% else %}
+          <!-- Used: only view/print -->
+          {% if v.pdf_path %}
+          <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank"
+             class="btn btn-outline-secondary btn-sm" title="הורד PDF">🖨️</a>
+          {% endif %}
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -109,13 +156,13 @@
 {% endif %}
 
 
-<!-- ── Edit Holder Modal ──────────────────────────────────────────────────── -->
+<!-- ── Edit Orderer Modal ──────────────────────────────────────────────────── -->
 {% if can_edit %}
 <div class="modal fade" id="editModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">עריכת פרטי מחזיק</h5>
+        <h5 class="modal-title">עריכת פרטי מזמין</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="/form/holders/{{ holder.mobile }}/edit">
@@ -151,7 +198,6 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="/form/vouchers/new">
-        <!-- Hidden: tells Python which holder this voucher belongs to -->
         <input type="hidden" name="mobile" value="{{ holder.mobile }}"/>
         <div class="modal-body">
           <div class="mb-3">
@@ -186,5 +232,50 @@
     </div>
   </div>
 </div>
+
+
+<!-- ── Send Modal (for draft vouchers) ───────────────────────────────────── -->
+<div class="modal fade" id="sendModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">שליחה ראשונה</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="sendForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">אמצעי שליחה *</label>
+            <select name="sent_via" class="form-select" required>
+              <option value="WA">📱 וואטסאפ</option>
+              <option value="EMAIL">📧 מייל</option>
+              <option value="PRINT">🖨️ הדפסה</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">הערה (אופציונלי)</label>
+            <input type="text" name="note" class="form-control"/>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">שלח</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Wire up send buttons for draft vouchers -->
+<script>
+document.querySelectorAll('.send-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var vid = btn.dataset.voucher;
+    document.getElementById('sendForm').action = '/form/vouchers/' + vid + '/send';
+    var modal = new bootstrap.Modal(document.getElementById('sendModal'));
+    modal.show();
+  });
+});
+</script>
 
 {% endblock %}

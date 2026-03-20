@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}כל המזמינים — גלים ונפש{% endblock %}
+
+{% block extra_css %}
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { background: #e9ecef; }
+th.sortable::after { content: ' ⇅'; font-size: .7em; color: #bbb; }
+th.sortable.asc::after { content: ' ▲'; color: #333; }
+th.sortable.desc::after { content: ' ▼'; color: #333; }
+.col-filter { font-size: .75rem; padding: 2px 4px; width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+.col-filter:focus { border-color: #86b7fe; outline: none; }
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/home">ראשי</a></li>
+    <li class="breadcrumb-item active">כל המזמינים</li>
+  </ol>
+</nav>
+
+<h4 class="mb-3">כל המזמינים ({{ orderers | length }})</h4>
+
+<div class="table-responsive bg-white shadow-sm rounded">
+  <table class="table table-hover mb-0" id="orderersTable">
+    <thead class="table-light">
+      <tr>
+        <th class="sortable" data-col="0">שם</th>
+        <th class="sortable" data-col="1">טלפון</th>
+        <th class="sortable" data-col="2">מייל</th>
+        <th class="sortable" data-col="3">שוברים</th>
+        <th class="sortable" data-col="4">נוצר</th>
+        <th></th>
+      </tr>
+      <tr class="filter-row">
+        <th><input class="col-filter" data-col="0" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="1" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="2" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="3" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="4" placeholder="סנן..."/></th>
+        <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)">✕</button></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in orderers %}
+      <tr class="clickable-row" onclick="location.href='/holders/{{ h.mobile }}/view'">
+        <td class="fw-bold">{{ h.name }}</td>
+        <td>{{ h.mobile }}</td>
+        <td class="small">{{ h.email or '' }}</td>
+        <td><span class="badge bg-secondary">{{ h.vouchers | length }}</span></td>
+        <td class="text-muted small">{{ h.created_at.strftime('%d/%m/%Y') }}</td>
+        <td>
+          <a href="/holders/{{ h.mobile }}/view" class="btn btn-outline-primary btn-sm">פתח</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center text-muted py-4">אין מזמינים עדיין</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+// Sorting
+document.querySelectorAll('th.sortable').forEach(function(th) {
+  th.addEventListener('click', function() {
+    var table = th.closest('table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    var col = parseInt(th.dataset.col);
+    var asc = !th.classList.contains('asc');
+    table.querySelectorAll('th.sortable').forEach(function(h) { h.classList.remove('asc','desc'); });
+    th.classList.add(asc ? 'asc' : 'desc');
+    rows.sort(function(a, b) {
+      var aT = (a.cells[col]||{}).textContent||'', bT = (b.cells[col]||{}).textContent||'';
+      var aN = parseFloat(aT.replace(/[^\d.-]/g,'')), bN = parseFloat(bT.replace(/[^\d.-]/g,''));
+      if (!isNaN(aN) && !isNaN(bN)) return asc ? aN-bN : bN-aN;
+      return asc ? aT.localeCompare(bT,'he') : bT.localeCompare(aT,'he');
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+  });
+});
+
+// Filters
+document.querySelectorAll('.col-filter').forEach(function(input) {
+  input.addEventListener('input', function() {
+    var table = input.closest('table'), filters = {};
+    table.querySelectorAll('.col-filter').forEach(function(i) {
+      var v = i.value.trim().toLowerCase(); if (v) filters[i.dataset.col] = v;
+    });
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      var show = true;
+      for (var c in filters) { if ((row.cells[c]||{}).textContent.toLowerCase().indexOf(filters[c])===-1) { show=false; break; } }
+      row.style.display = show ? '' : 'none';
+    });
+  });
+});
+function clearFilters(btn) {
+  var t = btn.closest('table');
+  t.querySelectorAll('.col-filter').forEach(function(i) { i.value=''; });
+  t.querySelectorAll('tbody tr').forEach(function(r) { r.style.display=''; });
+}
+</script>
+
+{% endblock %}

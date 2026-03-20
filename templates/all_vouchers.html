@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}כל השוברים — גלים ונפש{% endblock %}
+
+{% block extra_css %}
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { background: #e9ecef; }
+th.sortable::after { content: ' ⇅'; font-size: .7em; color: #bbb; }
+th.sortable.asc::after { content: ' ▲'; color: #333; }
+th.sortable.desc::after { content: ' ▼'; color: #333; }
+.col-filter { font-size: .75rem; padding: 2px 4px; width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+.col-filter:focus { border-color: #86b7fe; outline: none; }
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/home">ראשי</a></li>
+    <li class="breadcrumb-item active">כל השוברים</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">כל השוברים ({{ vouchers | length }})</h4>
+  <a href="/report?fmt=csv" class="btn btn-outline-secondary btn-sm">⬇️ ייצוא CSV</a>
+</div>
+
+<div class="table-responsive bg-white shadow-sm rounded">
+  <table class="table table-hover mb-0" id="allVouchersTable">
+    <thead class="table-light">
+      <tr>
+        <th class="sortable" data-col="0">מס׳ שובר</th>
+        <th class="sortable" data-col="1">מזמין</th>
+        <th class="sortable" data-col="2">טלפון</th>
+        <th class="sortable" data-col="3">מייל</th>
+        <th class="sortable" data-col="4">סוג</th>
+        <th class="sortable" data-col="5">סטטוס</th>
+        <th class="sortable" data-col="6">תוקף עד</th>
+        <th class="sortable" data-col="7">הונפק</th>
+        <th></th>
+      </tr>
+      <tr class="filter-row">
+        <th><input class="col-filter" data-col="0" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="1" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="2" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="3" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="4" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="5" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="6" placeholder="סנן..."/></th>
+        <th><input class="col-filter" data-col="7" placeholder="סנן..."/></th>
+        <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)">✕</button></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vouchers %}
+      {% set name = v.holder_name or (v.holder_ref.name if v.holder_ref else '—') %}
+      {% set email = v.holder_email or (v.holder_ref.email if v.holder_ref else '') or '' %}
+      <tr>
+        <td class="font-monospace small">{{ v.voucher_id }}</td>
+        <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none">{{ name }}</a></td>
+        <td>{{ v.mobile }}</td>
+        <td class="small">{{ email }}</td>
+        <td>{{ v.voucher_type }}</td>
+        <td>
+          {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+          {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
+          {% else %}<span class="badge-used">מומש</span>{% endif %}
+        </td>
+        <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
+        <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
+        <td class="text-nowrap">
+          <a href="/vouchers/{{ v.voucher_id }}/view" class="btn btn-outline-primary btn-sm" title="הצג">📄</a>
+          {% if v.pdf_path %}
+          <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank" class="btn btn-outline-secondary btn-sm" title="הדפס">🖨️</a>
+          {% endif %}
+          {% if v.status in ['sent'] %}
+          <form method="post" action="/form/vouchers/{{ v.voucher_id }}/send" style="display:inline;">
+            <input type="hidden" name="sent_via" value="WA"/>
+            <button type="submit" class="btn btn-outline-success btn-sm" title="וואטסאפ">📱</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="9" class="text-center text-muted py-4">אין שוברים עדיין</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.querySelectorAll('th.sortable').forEach(function(th) {
+  th.addEventListener('click', function() {
+    var table = th.closest('table'), tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    var col = parseInt(th.dataset.col), asc = !th.classList.contains('asc');
+    table.querySelectorAll('th.sortable').forEach(function(h) { h.classList.remove('asc','desc'); });
+    th.classList.add(asc ? 'asc' : 'desc');
+    rows.sort(function(a, b) {
+      var aT = (a.cells[col]||{}).textContent||'', bT = (b.cells[col]||{}).textContent||'';
+      var aN = parseFloat(aT.replace(/[^\d.-]/g,'')), bN = parseFloat(bT.replace(/[^\d.-]/g,''));
+      if (!isNaN(aN) && !isNaN(bN)) return asc ? aN-bN : bN-aN;
+      return asc ? aT.localeCompare(bT,'he') : bT.localeCompare(aT,'he');
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+  });
+});
+document.querySelectorAll('.col-filter').forEach(function(input) {
+  input.addEventListener('input', function() {
+    var table = input.closest('table'), filters = {};
+    table.querySelectorAll('.col-filter').forEach(function(i) {
+      var v = i.value.trim().toLowerCase(); if (v) filters[i.dataset.col] = v;
+    });
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      var show = true;
+      for (var c in filters) { if ((row.cells[c]||{}).textContent.toLowerCase().indexOf(filters[c])===-1) { show=false; break; } }
+      row.style.display = show ? '' : 'none';
+    });
+  });
+});
+function clearFilters(btn) {
+  var t = btn.closest('table');
+  t.querySelectorAll('.col-filter').forEach(function(i) { i.value=''; });
+  t.querySelectorAll('tbody tr').forEach(function(r) { r.style.display=''; });
+}
+</script>
+
+{% endblock %}

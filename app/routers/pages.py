@@ -52,59 +52,38 @@ def home_page(
     db: Session = Depends(get_db),
     q: Optional[str] = Query(None),
 ):
-    """Dashboard: stats, search (GET form), and 10 most recent vouchers."""
+    """Dashboard: stats + search for orderer by name/phone/email."""
     total   = db.query(Voucher).count()
     drafts  = db.query(Voucher).filter_by(status="draft").count()
     sent    = db.query(Voucher).filter_by(status="sent").count()
     used    = db.query(Voucher).filter_by(status="used").count()
-    holders = db.query(Holder).count()
+    holders_count = db.query(Holder).count()
 
-    recent         = []
     search_results = None
+    found_holders  = None
 
     if q:
-        # Server-side free-text search across all relevant fields
-        # Also matches voucher ID suffix (e.g. "001" matches "0541234567-001")
+        # Search for orderers (holders) by name, phone, or email
         term = f"%{q}%"
-        suffix_term = f"%-{q}" if not q.startswith("-") else f"%{q}"
-        search_results = (
-            db.query(Voucher)
-            .outerjoin(Holder, Holder.mobile == Voucher.mobile)
+        found_holders = (
+            db.query(Holder)
             .filter(or_(
-                Voucher.voucher_id.ilike(term),
-                Voucher.voucher_id.ilike(suffix_term),
-                Voucher.holder_name.ilike(term),
-                Voucher.holder_mobile.ilike(term),
-                Voucher.holder_email.ilike(term),
-                Voucher.receipt_number.ilike(term),
-                Voucher.notes.ilike(term),
                 Holder.name.ilike(term),
                 Holder.mobile.ilike(term),
                 Holder.email.ilike(term),
             ))
-            .order_by(Voucher.issued_at.desc())
+            .order_by(Holder.name)
             .all()
         )
-    else:
-        recent = (
-            db.query(Voucher)
-            .order_by(Voucher.issued_at.desc())
-            .limit(10)
-            .all()
-        )
-
-    # All holders — for the "new voucher" modal dropdown
-    all_holders = db.query(Holder).order_by(Holder.name).all()
+        search_results = True  # flag that a search was performed
 
     return templates.TemplateResponse("home.html", {
         "request":        request,
         "stats":          {"total": total, "draft": drafts, "sent": sent,
-                           "used": used, "holders": holders},
-        "recent":         recent,
+                           "used": used, "holders": holders_count},
         "search_q":       q or "",
         "search_results": search_results,
-        "all_holders":    all_holders,
-        "today":          date.today().isoformat(),
+        "found_holders":  found_holders,
     })
 
 
@@ -123,6 +102,34 @@ def holder_page(mobile: str, request: Request, db: Session = Depends(get_db)):
         "can_edit": rules.can_edit_holder(db, mobile),
         "vouchers": holder.vouchers,
         "today":    date.today().isoformat(),
+    })
+
+
+# ── GET: All orderers page ───────────────────────────────────────────────────
+
+@router.get("/orderers/view", response_class=HTMLResponse)
+def orderers_page(request: Request, db: Session = Depends(get_db)):
+    """All orderers with voucher counts."""
+    orderers = db.query(Holder).order_by(Holder.name).all()
+    return templates.TemplateResponse("orderers.html", {
+        "request":  request,
+        "orderers": orderers,
+    })
+
+
+# ── GET: All vouchers page ──────────────────────────────────────────────────
+
+@router.get("/all-vouchers/view", response_class=HTMLResponse)
+def all_vouchers_page(request: Request, db: Session = Depends(get_db)):
+    """All vouchers with orderer names and inline actions."""
+    vouchers = (
+        db.query(Voucher)
+        .order_by(Voucher.issued_at.desc())
+        .all()
+    )
+    return templates.TemplateResponse("all_vouchers.html", {
+        "request":  request,
+        "vouchers": vouchers,
     })
 
 
