@@ -121,19 +121,28 @@ def _draw_wave_decoration(c: canvas.Canvas, y: float, color=None):
 
 
 def _draw_ornament(c: canvas.Canvas, y: float):
-    """Draw a small centered ornamental divider (like ❧ or ✦)."""
-    c.setFillColor(_ORNAMENT)
-    c.setFont("Heebo", 12)
-    ornament = "✦"
-    w = c.stringWidth(ornament, "Heebo", 12)
-    c.drawString((_W - w) / 2, y, ornament)
-    # Small lines on each side
+    """Draw a small centered ornamental divider using lines and a diamond shape."""
+    mid_x = _W / 2
+    mid_y = y + 4
+    line_len = 18 * mm
+    gap = 5 * mm
+    diamond = 2.5  # half-size of diamond
+
+    # Lines on each side
     c.setStrokeColor(_ORNAMENT)
-    c.setLineWidth(0.5)
-    line_len = 15 * mm
-    gap = 4 * mm
-    c.line(_W / 2 - gap - line_len, y + 4, _W / 2 - gap, y + 4)
-    c.line(_W / 2 + gap, y + 4, _W / 2 + gap + line_len, y + 4)
+    c.setLineWidth(0.7)
+    c.line(mid_x - gap - line_len, mid_y, mid_x - gap, mid_y)
+    c.line(mid_x + gap, mid_y, mid_x + gap + line_len, mid_y)
+
+    # Diamond shape in center (drawn with path)
+    c.setFillColor(_ORNAMENT)
+    p = c.beginPath()
+    p.moveTo(mid_x, mid_y + diamond)
+    p.lineTo(mid_x + diamond, mid_y)
+    p.lineTo(mid_x, mid_y - diamond)
+    p.lineTo(mid_x - diamond, mid_y)
+    p.close()
+    c.drawPath(p, stroke=0, fill=1)
 
 
 def generate_pdf(voucher, folder: Path) -> Path:
@@ -165,29 +174,29 @@ def generate_pdf(voucher, folder: Path) -> Path:
     _draw_gradient_bg(c)
 
     # ── Starting Y position (from top) ──
-    y = _H - 18 * mm
+    y = _H - 20 * mm
 
     # ── Business name: "גלים ונפש" ──
-    _draw_centered(c, "גלים ונפש", y, size=26, color=_TEAL)
-    y -= 7 * mm
+    _draw_centered(c, "גלים ונפש", y, size=30, color=_TEAL)
+    y -= 9 * mm
 
     # ── Subtitle ──
-    _draw_centered(c, "טיפולי וואטסו", y, size=13, color=_TEAL_DARK)
-    y -= 6 * mm
+    _draw_centered(c, "טיפולי וואטסו", y, size=14, color=_TEAL_DARK)
+    y -= 5 * mm
 
     # ── Wave decoration ──
     _draw_wave_decoration(c, y)
-    y -= 8 * mm
+    y -= 6 * mm
 
-    # ── Pool photo (centered, with rounded clip simulation) ──
-    pool_w = 55 * mm
-    pool_h = 40 * mm
+    # ── Pool photo (centered, large, with rounded clip) ──
+    pool_w = 70 * mm
+    pool_h = 52 * mm
 
     if _POOL_IMAGE.exists():
         pool_x = (_W - pool_w) / 2
         pool_y = y - pool_h
         try:
-            # Draw a white rounded rect behind the image for a "frame" effect
+            # White rounded frame behind image
             c.setFillColor(_WHITE)
             c.setStrokeColor(_ORNAMENT)
             c.setLineWidth(1.5)
@@ -206,20 +215,20 @@ def generate_pdf(voucher, folder: Path) -> Path:
         except Exception:
             pass
 
-    y -= pool_h + 8 * mm
+    y -= pool_h + 6 * mm
 
     # ── Excitement title ──
-    _draw_centered(c, "איזה כיף קיבלת שובר מתנה", y, size=16, color=_TEAL)
+    _draw_centered(c, "איזה כיף קיבלת שובר מתנה", y, size=17, color=_TEAL)
     y -= 7 * mm
 
     # ── Voucher type ──
     type_text = f"טיפול וואטסו {voucher.voucher_type}"
-    _draw_centered(c, type_text, y, size=13, color=_TEAL_DARK)
-    y -= 7 * mm
+    _draw_centered(c, type_text, y, size=14, color=_TEAL_DARK)
+    y -= 6 * mm
 
     # ── Ornamental divider ──
     _draw_ornament(c, y)
-    y -= 8 * mm
+    y -= 7 * mm
 
     # ── Description text (treatment info) ──
     desc_lines = [
@@ -228,25 +237,25 @@ def generate_pdf(voucher, folder: Path) -> Path:
         "הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים",
     ]
     for line in desc_lines:
-        _draw_centered(c, line, y, size=9, color=_WARM)
+        _draw_centered(c, line, y, size=9.5, color=_WARM)
         y -= 4.5 * mm
 
-    y -= 3 * mm
+    y -= 2 * mm
 
     # ── Contact info ──
     _draw_centered(c, "למימוש ותיאום תאריך", y, size=10, color=_GREY)
     y -= 5 * mm
-    _draw_centered(c, "אביגל 050-4014696", y, size=11, color=_TEAL_DARK)
-    y -= 8 * mm
+    _draw_centered(c, "אביגל 050-4014696", y, size=12, color=_TEAL_DARK)
+    y -= 6 * mm
 
     # ── Expiry date ──
     valid_str = voucher.valid_until.strftime('%d/%m/%Y')
-    _draw_centered(c, f"השובר בתוקף עד {valid_str}", y, size=11, color=_WARM)
-    y -= 6 * mm
+    _draw_centered(c, f"השובר בתוקף עד {valid_str}", y, size=12, color=_WARM)
+    y -= 5 * mm
 
     # ── QR code (if exists) — small, centered ──
     if voucher.qr_path and Path(voucher.qr_path).exists():
-        qr_size = 18 * mm
+        qr_size = 20 * mm
         qr_x = (_W - qr_size) / 2
         qr_y = y - qr_size
         try:
@@ -254,13 +263,15 @@ def generate_pdf(voucher, folder: Path) -> Path:
             c.drawImage(qr_img, qr_x, qr_y, qr_size, qr_size)
         except Exception:
             pass
-        y -= qr_size + 3 * mm
 
-    # ── Voucher ID + receipt (tiny, bottom) ──
-    _draw_centered(c, f"מס׳ שובר: {voucher.voucher_id}", y, size=6, color=_LGREY)
-    y -= 3 * mm
+    # ── Voucher ID + receipt (pinned to bottom of page) ──
+    bottom_y = 10 * mm
     if voucher.receipt_number:
-        _draw_centered(c, f"מס׳ קבלה: {voucher.receipt_number}", y, size=6, color=_LGREY)
+        _draw_centered(c, f"מס׳ קבלה {voucher.receipt_number}  |  מס׳ שובר {voucher.voucher_id}",
+                        bottom_y, size=6, color=_LGREY)
+    else:
+        _draw_centered(c, f"מס׳ שובר {voucher.voucher_id}",
+                        bottom_y, size=6, color=_LGREY)
 
     c.save()
     return pdf_path
