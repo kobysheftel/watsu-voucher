@@ -217,17 +217,23 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     y -= pool_h + 6 * mm
 
-    # ── Personalized title with orderer name ──
-    # Use display_name if set, otherwise holder_name
-    name = getattr(voucher, 'display_name', None) or voucher.holder_name or ""
-    if voucher.voucher_type == "זוגי":
+    # ── Title — personalized if display_name set, anonymous otherwise ──
+    name = getattr(voucher, 'display_name', None) or ""
+    name = name.strip()
+
+    if name:
+        # Personalized: "איזה כיף" + "{name} מזמין אותך לטיפול [זוגי]"
         _draw_centered(c, "איזה כיף", y, size=17, color=_TEAL)
         y -= 7 * mm
-        _draw_centered(c, f"{name} מזמין אותך לטיפול זוגי", y, size=14, color=_TEAL_DARK)
+        if voucher.voucher_type == "זוגי":
+            _draw_centered(c, f"{name} מזמין אותך לטיפול זוגי", y, size=14, color=_TEAL_DARK)
+        else:
+            _draw_centered(c, f"{name} מזמין אותך לטיפול", y, size=14, color=_TEAL_DARK)
     else:
-        _draw_centered(c, "איזה כיף", y, size=17, color=_TEAL)
+        # Anonymous: "איזה כיף קיבלת שובר מתנה" + "טיפול וואטסו {type}"
+        _draw_centered(c, "איזה כיף קיבלת שובר מתנה", y, size=17, color=_TEAL)
         y -= 7 * mm
-        _draw_centered(c, f"{name} מזמין אותך לטיפול", y, size=14, color=_TEAL_DARK)
+        _draw_centered(c, f"טיפול וואטסו {voucher.voucher_type}", y, size=14, color=_TEAL_DARK)
     y -= 6 * mm
 
     # ── Ornamental divider ──
