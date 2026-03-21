@@ -1,12 +1,21 @@
-// Service Worker — minimal, enables PWA install prompt
-const CACHE_NAME = 'vouchers-v1';
+// Service Worker — network-first, auto-updates on new versions
+// Bump this version on each deploy to clear old caches
+const CACHE_NAME = 'vouchers-v2';
 
 self.addEventListener('install', (event) => {
+  // Activate immediately, don't wait for old tabs to close
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  // Clean up old caches
+  event.waitUntil(
+    caches.keys().then((names) => {
+      return Promise.all(
+        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+      );
+    }).then(() => clients.claim())
+  );
 });
 
 // Network-first strategy: try network, fall back to cache
