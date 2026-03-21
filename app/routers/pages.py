@@ -128,9 +128,13 @@ def all_vouchers_page(request: Request, db: Session = Depends(get_db)):
         .order_by(Voucher.issued_at.desc())
         .all()
     )
+    all_holders = db.query(Holder).order_by(Holder.name).all()
     return templates.TemplateResponse("all_vouchers.html", {
-        "request":  request,
-        "vouchers": vouchers,
+        "request":        request,
+        "vouchers":       vouchers,
+        "all_holders":    all_holders,
+        "today":          date.today().isoformat(),
+        "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
     })
 
 
@@ -146,9 +150,10 @@ def voucher_page(voucher_id: str, request: Request, db: Session = Depends(get_db
     holder = db.get(Holder, voucher.mobile) if voucher.mobile else None
 
     return templates.TemplateResponse("voucher_view.html", {
-        "request": request,
-        "voucher": voucher,
-        "holder":  holder,
+        "request":        request,
+        "voucher":        voucher,
+        "holder":         holder,
+        "today":          date.today().isoformat(),
     })
 
 

@@ -1,12 +1,54 @@
 {% extends "base.html" %}
 {% block title %}שובר {{ voucher.voucher_id }} — גלים ונפש{% endblock %}
 
+{% block extra_css %}
+/* Inline label + field layout */
+.field-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.field-label {
+  min-width: 90px;
+  text-align: right;
+  font-size: .85rem;
+  color: #666;
+  flex-shrink: 0;
+}
+.field-value {
+  flex: 1;
+  font-weight: 500;
+}
+.field-value input,
+.field-value select,
+.field-value textarea {
+  width: 100%;
+}
+
+/* Action buttons row */
+.action-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.action-btns .btn { flex: 1; min-width: 100px; }
+
+/* Mobile adjustments */
+@media (max-width: 576px) {
+  .field-row { flex-direction: column; align-items: stretch; gap: 2px; }
+  .field-label { text-align: right; min-width: auto; }
+  .action-btns .btn { flex: none; width: 100%; }
+}
+{% endblock %}
+
 {% block content %}
 
 <!-- Breadcrumb -->
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/home">ראשי</a></li>
+    <li class="breadcrumb-item"><a href="/all-vouchers/view">שוברים</a></li>
     {% if holder %}
     <li class="breadcrumb-item">
       <a href="/holders/{{ holder.mobile }}/view">{{ holder.name }}</a>
@@ -16,261 +58,173 @@
   </ol>
 </nav>
 
-<div class="row g-4">
+<div class="card shadow-sm mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="font-monospace fw-bold">{{ voucher.voucher_id }}</span>
+    {% if voucher.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+    {% elif voucher.status == 'sent' %}<span class="badge-sent">נשלח</span>
+    {% else %}<span class="badge-used">מומש</span>{% endif %}
+  </div>
 
-  <!-- ── Left column: voucher info ──────────────────────────────────────── -->
-  <div class="col-md-7">
+  <div class="card-body">
 
-    <!-- Main voucher card -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="font-monospace fw-bold">{{ voucher.voucher_id }}</span>
-        {% if voucher.status == 'draft' %}<span class="badge-draft">טיוטה</span>
-        {% elif voucher.status == 'sent' %}<span class="badge-sent">נשלח</span>
-        {% else %}<span class="badge-used">מומש</span>{% endif %}
-      </div>
-      <div class="card-body">
-        <div class="row mb-2">
-          <div class="col-5 text-muted small">סוג שובר</div>
-          <div class="col-7 fw-bold fs-5">{{ voucher.voucher_type }}</div>
-        </div>
-        <div class="row mb-2">
-          <div class="col-5 text-muted small">תוקף עד</div>
-          <div class="col-7">{{ voucher.valid_until.strftime('%d/%m/%Y') }}</div>
-        </div>
-        <div class="row mb-2">
-          <div class="col-5 text-muted small">הונפק</div>
-          <div class="col-7">{{ voucher.issued_at.strftime('%d/%m/%Y %H:%M') }}</div>
-        </div>
-        {% if voucher.first_sent_at %}
-        <div class="row mb-2">
-          <div class="col-5 text-muted small">נשלח ראשון</div>
-          <div class="col-7">{{ voucher.first_sent_at.strftime('%d/%m/%Y %H:%M') }}</div>
-        </div>
-        {% endif %}
-      </div>
+    <!-- Orderer details -->
+    {% set d_name   = voucher.holder_name   or (holder.name   if holder else '—') %}
+    {% set d_mobile = voucher.holder_mobile or (holder.mobile if holder else '—') %}
+    {% set d_email  = voucher.holder_email  or (holder.email  if holder else '') %}
+
+    <h6 class="text-muted mb-2">פרטי המזמין
+      {% if voucher.is_cemented %}<span class="badge bg-light text-secondary border small">מוצמד</span>{% endif %}
+    </h6>
+
+    <div class="field-row">
+      <span class="field-label">שם</span>
+      <span class="field-value fw-bold">{{ d_name }}</span>
     </div>
-
-    <!-- Holder snapshot -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>פרטי מקבל</span>
-        {% if voucher.is_cemented %}
-        <span class="badge bg-light text-secondary border small">מוצמד</span>
-        {% endif %}
-      </div>
-      <div class="card-body">
-        {% set d_name   = voucher.holder_name   or (holder.name   if holder else '—') %}
-        {% set d_mobile = voucher.holder_mobile or (holder.mobile if holder else '—') %}
-        {% set d_email  = voucher.holder_email  or (holder.email  if holder else '') %}
-
-        <div class="row mb-1">
-          <div class="col-4 text-muted small">שם</div>
-          <div class="col-8 fw-bold">{{ d_name }}</div>
-        </div>
-        <div class="row mb-1">
-          <div class="col-4 text-muted small">טלפון</div>
-          <div class="col-8">{{ d_mobile }}</div>
-        </div>
-        {% if d_email %}
-        <div class="row mb-1">
-          <div class="col-4 text-muted small">אימייל</div>
-          <div class="col-8 small">{{ d_email }}</div>
-        </div>
-        {% endif %}
-        {% if holder %}
-        <div class="mt-2">
-          <a href="/holders/{{ holder.mobile }}/view"
-             class="btn btn-outline-secondary btn-sm">לדף המזמין ←</a>
-        </div>
-        {% endif %}
-      </div>
+    <div class="field-row">
+      <span class="field-label">טלפון</span>
+      <span class="field-value">{{ d_mobile }}</span>
     </div>
-
-    <!-- Receipt / Notes form (POST to Python) -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header">פרטי קבלה / הערות</div>
-      <div class="card-body">
-        <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/notes">
-          <div class="mb-2">
-            <label class="form-label small text-muted mb-1">מספר קבלה</label>
-            <input type="text" name="receipt_number" class="form-control form-control-sm"
-                   value="{{ voucher.receipt_number or '' }}"
-                   {% if voucher.is_frozen %}readonly{% endif %}/>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small text-muted mb-1">תאריך קבלה</label>
-            <input type="date" name="receipt_date" class="form-control form-control-sm"
-                   value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
-                   {% if voucher.is_frozen %}readonly{% endif %}/>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small text-muted mb-1">הערות</label>
-            <textarea name="notes" class="form-control form-control-sm" rows="2"
-                      {% if voucher.is_frozen %}readonly{% endif %}>{{ voucher.notes or '' }}</textarea>
-          </div>
-          {% if not voucher.is_frozen %}
-          <button type="submit" class="btn btn-outline-primary btn-sm">💾 שמור הערות</button>
-          {% endif %}
-        </form>
-      </div>
+    {% if d_email %}
+    <div class="field-row">
+      <span class="field-label">מייל</span>
+      <span class="field-value small">{{ d_email }}</span>
     </div>
+    {% endif %}
 
-  </div><!-- /left col -->
+    <hr class="my-3"/>
 
+    <!-- Voucher fields (editable if not frozen) -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/notes">
 
-  <!-- ── Right column: actions + QR + history ───────────────────────────── -->
-  <div class="col-md-5">
-
-    <!-- Action buttons -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header">פעולות</div>
-      <div class="card-body d-grid gap-2">
-
-        {% if voucher.status == 'draft' %}
-          <!-- First send: opens modal with form -->
-          <button class="btn btn-primary"
-                  data-bs-toggle="modal" data-bs-target="#sendModal">
-            📤 שלח שובר ראשון
-          </button>
-
-        {% elif voucher.status == 'sent' %}
-          <!-- Resend: same modal, same form -->
-          <button class="btn btn-outline-primary"
-                  data-bs-toggle="modal" data-bs-target="#sendModal">
-            🔄 שלח מחדש
-          </button>
-          <!-- Mark used: direct form POST, no JavaScript needed -->
-          <button class="btn btn-success"
-                  data-bs-toggle="modal" data-bs-target="#useModal">
-            ✅ סמן כמומש
-          </button>
-
-        {% else %}
-          <div class="text-center text-muted py-2 small">
-            ✅ שובר מומש — לא ניתן לפעולות נוספות
-          </div>
-        {% endif %}
-
-        <!-- WhatsApp link -->
-        {% set wa_num = voucher.holder_mobile or (holder.mobile if holder else None) %}
-        {% if wa_num and voucher.status in ['sent', 'used'] %}
-        <a href="https://wa.me/972{{ wa_num[1:] }}" target="_blank"
-           class="btn btn-outline-success btn-sm">
-          📱 פתח ווטסאפ
-        </a>
-        {% endif %}
-
-        <!-- PDF download -->
-        {% if voucher.pdf_path %}
-        <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-           class="btn btn-outline-secondary btn-sm">
-          📄 הורד PDF
-        </a>
-        {% endif %}
-
+      <div class="field-row">
+        <span class="field-label">סוג שובר</span>
+        <span class="field-value fw-bold fs-5">{{ voucher.voucher_type }}</span>
       </div>
-    </div>
 
-    <!-- QR code image -->
+      <div class="field-row">
+        <span class="field-label">תוקף עד</span>
+        <span class="field-value">{{ voucher.valid_until.strftime('%d/%m/%Y') }}</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">מס׳ קבלה</span>
+        <span class="field-value">
+          <input type="text" name="receipt_number" class="form-control form-control-sm"
+                 value="{{ voucher.receipt_number or '' }}"
+                 {% if voucher.is_frozen %}readonly{% endif %}
+                 onchange="this.form.submit()"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">תאריך קבלה</span>
+        <span class="field-value">
+          <input type="date" name="receipt_date" class="form-control form-control-sm"
+                 value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
+                 {% if voucher.is_frozen %}readonly{% endif %}
+                 onchange="this.form.submit()"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">הערות</span>
+        <span class="field-value">
+          <textarea name="notes" class="form-control form-control-sm" rows="2"
+                    {% if voucher.is_frozen %}readonly{% endif %}
+                    onchange="this.form.submit()">{{ voucher.notes or '' }}</textarea>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">הונפק</span>
+        <span class="field-value text-muted small">{{ voucher.issued_at.strftime('%d/%m/%Y %H:%M') }}</span>
+      </div>
+
+      {% if voucher.first_sent_at %}
+      <div class="field-row">
+        <span class="field-label">נשלח ראשון</span>
+        <span class="field-value text-muted small">{{ voucher.first_sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
+      </div>
+      {% endif %}
+
+    </form>
+
+    <!-- QR code (if exists) -->
     {% if voucher.qr_path %}
-    <div class="card shadow-sm mb-3 text-center">
-      <div class="card-header">קוד QR</div>
-      <div class="card-body">
-        <img src="/vouchers/{{ voucher.voucher_id }}/qr"
-             class="img-fluid" style="max-width:160px;" alt="QR"/>
-      </div>
+    <div class="text-center my-3">
+      <img src="/vouchers/{{ voucher.voucher_id }}/qr"
+           style="max-width:120px;" alt="QR"/>
     </div>
     {% endif %}
 
-    <!-- Sending history -->
-    {% if voucher.sendings %}
-    <div class="card shadow-sm">
-      <div class="card-header">היסטוריית שליחות</div>
-      <ul class="list-group list-group-flush">
-        {% for s in voucher.sendings %}
-        <li class="list-group-item small">
-          <div class="d-flex justify-content-between">
-            <span>{{ s.sent_via_display }}</span>
-            <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
-          </div>
-          {% if s.note %}
-          <div class="text-muted fst-italic">{{ s.note }}</div>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
+  </div>
+</div>
+
+<!-- Action buttons -->
+<div class="action-btns">
+  {% if voucher.status == 'draft' %}
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
+      <input type="hidden" name="sent_via" value="WA"/>
+      <button type="submit" class="btn btn-success">📱 שלח בווטסאפ</button>
+    </form>
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
+      <input type="hidden" name="sent_via" value="EMAIL"/>
+      <button type="submit" class="btn btn-info text-white">📧 שלח במייל</button>
+    </form>
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
+      <input type="hidden" name="sent_via" value="PRINT"/>
+      <button type="submit" class="btn btn-secondary">🖨️ הדפס</button>
+    </form>
+
+  {% elif voucher.status == 'sent' %}
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
+      <input type="hidden" name="sent_via" value="WA"/>
+      <button type="submit" class="btn btn-success">📱 ווטסאפ</button>
+    </form>
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
+      <input type="hidden" name="sent_via" value="EMAIL"/>
+      <button type="submit" class="btn btn-info text-white">📧 מייל</button>
+    </form>
+    {% if voucher.pdf_path %}
+    <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
+       class="btn btn-secondary">🖨️ הדפס</a>
     {% endif %}
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/use" class="d-contents"
+          onsubmit="return confirm('סמן שובר כמומש? פעולה זו בלתי הפיכה');">
+      <button type="submit" class="btn btn-warning">✅ סמן כמומש</button>
+    </form>
 
-  </div><!-- /right col -->
-</div><!-- /row -->
+  {% else %}
+    {% if voucher.pdf_path %}
+    <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
+       class="btn btn-secondary">🖨️ הדפס</a>
+    {% endif %}
+    <span class="btn btn-light disabled">✅ מומש</span>
+  {% endif %}
+</div>
 
-
-<!-- ── Send / Resend Modal ──────────────────────────────────────────────────── -->
-{% if voucher.status in ['draft', 'sent'] %}
-<div class="modal fade" id="sendModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-          {% if voucher.status == 'draft' %}שליחה ראשונה{% else %}שליחה מחדש{% endif %}
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- Sending history -->
+{% if voucher.sendings %}
+<div class="card shadow-sm">
+  <div class="card-header small fw-bold">היסטוריית שליחות</div>
+  <ul class="list-group list-group-flush">
+    {% for s in voucher.sendings %}
+    <li class="list-group-item small py-2">
+      <div class="d-flex justify-content-between">
+        <span>{{ s.sent_via_display }}</span>
+        <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
       </div>
-      <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">אמצעי שליחה *</label>
-            <select name="sent_via" class="form-select" required>
-              <option value="WA">📱 וואטסאפ</option>
-              <option value="EMAIL">📧 מייל</option>
-              <option value="PRINT">🖨️ הדפסה</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">הערה (אופציונלי)</label>
-            <input type="text" name="note" class="form-control"/>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-          <button type="submit" class="btn btn-primary">שלח</button>
-        </div>
-      </form>
-    </div>
-  </div>
+      {% if s.note %}
+      <div class="text-muted fst-italic">{{ s.note }}</div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
 </div>
 {% endif %}
 
-
-<!-- ── Mark Used Confirmation Modal ─────────────────────────────────────────── -->
-{% if voucher.status == 'sent' %}
-<div class="modal fade" id="useModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">אישור מימוש שובר</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="alert alert-warning mb-0">
-          ⚠️ פעולה זו בלתי הפיכה — השובר יוקפא לצמיתות ולא ניתן יהיה לשלוח אותו מחדש.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-        <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/use"
-              style="display:inline;">
-          <button type="submit" class="btn btn-success">✅ כן, מומש</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Auto-open WhatsApp after send/resend via WA -->
+<!-- WhatsApp auto-open modal -->
 {% set wa_mobile = request.query_params.get('wa_open') %}
 {% if wa_mobile %}
 <div class="modal fade show" id="waModal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.5);">
@@ -280,14 +234,14 @@
         <h5 class="modal-title">📱 פתח וואטסאפ</h5>
       </div>
       <div class="modal-body text-center">
-        <p class="mb-3">השובר נשלח בהצלחה! לחץ לפתיחת וואטסאפ:</p>
-        <a href="https://wa.me/972{{ wa_mobile[1:] }}?text={{ 'שלום, שלחתי לך שובר מתנה מגלים ונפש 🌊' | urlencode }}"
+        <p class="mb-3">השובר נשלח בהצלחה</p>
+        <a href="https://wa.me/972{{ wa_mobile[1:] }}?text={{ 'שלום, שלחתי לך שובר מתנה מגלים ונפש' | urlencode }}"
            target="_blank"
            class="btn btn-success btn-lg">
           📱 פתח וואטסאפ
         </a>
         <p class="text-muted small mt-3">
-          💡 אחרי פתיחת הצ׳אט, צרף את קובץ ה-PDF ידנית
+          אחרי פתיחת הצ׳אט, צרף את קובץ ה-PDF ידנית
         </p>
       </div>
       <div class="modal-footer">
