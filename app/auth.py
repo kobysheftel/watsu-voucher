@@ -1,13 +1,14 @@
 """
-Authentication module — PIN + WebAuthn biometric auth for single-user admin.
+Authentication module — Multi-user PIN + WebAuthn biometric auth.
 
+Two pre-configured users: Koby and Avigal.
 Stores credentials in config/auth.json (git-ignored).
-Sessions are cookie-based with 24-hour expiry.
+Sessions are cookie-based with 15-minute sliding timeout.
+No self-registration — users are hardcoded.
 """
 
 import hashlib
 import json
-import os
 import secrets
 import time
 from pathlib import Path
@@ -19,6 +20,12 @@ from fastapi import Request, Response
 AUTH_FILE = Path("config/auth.json")
 SESSION_MAX_AGE = 15 * 60  # 15 minutes inactivity timeout
 SESSION_COOKIE_NAME = "voucher_session"
+
+# Pre-configured users (PINs only used for initial seeding)
+_SEED_USERS = {
+    "Koby": "122156",
+    "Avigal": "40689",
+}
 
 
 # --- PIN Hashing ---
@@ -54,74 +61,147 @@ def _save_auth_data(data: dict) -> None:
     AUTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def init_auth() -> None:
+    """
+    Initialize auth.json with pre-configured users.
+    Called on app startup. If file is missing or has old single-user format,
+    creates a fresh file with both users' hashed PINs.
+    """
+    data = _load_auth_data()
+
+    # Check if already in new multi-user format
+    if "users" in data:
+        return  # Already initialized
+
+    # Create new multi-user structure (replaces any old single-user format)
+    users = {}
+    for name, pin in _SEED_USERS.items():
+        users[name] = {
+            "pin": hash_pin(pin),
+            "webauthn_credentials": [],
+        }
+
+    _save_auth_data({"users": users})
+
+
 def is_setup_complete() -> bool:
-    """Check if initial setup (PIN) has been done."""
-    data = _load_auth_data()
-    return "pin" in data
+    """Always True — users are pre-configured, no setup needed."""
+    return True
 
 
-def save_pin(pin: str) -> None:
-    """Hash and save a PIN to auth data."""
+def check_pin(pin: str) -> Optional[str]:
+    """
+    Verify a PIN against all users' stored credentials.
+    Returns the username if PIN matches, or None.
+    """
     data = _load_auth_data()
-    data["pin"] = hash_pin(pin)
+    users = data.get("users", {})
+
+    for username, user_data in users.items():
+        if "pin" in user_data and verify_pin(pin, user_data["pin"]):
+            return username
+
+    return None
+
+
+# --- WebAuthn Credential Storage (per user) ---
+
+def get_webauthn_credentials_for_user(username: str) -> list:
+    """Get stored WebAuthn credentials for a specific user."""
+    data = _load_auth_data()
+    user_data = data.get("users", {}).get(username, {})
+    return user_data.get("webauthn_credentials", [])
+
+
+def get_all_webauthn_credentials() -> list[tuple[str, dict]]:
+    """
+    Get ALL WebAuthn credentials from ALL users.
+    Returns list of (username, credential_dict) tuples.
+    Used for login — we don't know who's logging in yet.
+    """
+    data = _load_auth_data()
+    result = []
+    for username, user_data in data.get("users", {}).items():
+        for cred in user_data.get("webauthn_credentials", []):
+            result.append((username, cred))
+    return result
+
+
+def save_webauthn_credential(username: str, credential: dict) -> None:
+    """Add a WebAuthn credential for a specific user."""
+    data = _load_auth_data()
+    users = data.get("users", {})
+    if username not in users:
+        return
+
+    if "webauthn_credentials" not in users[username]:
+        users[username]["webauthn_credentials"] = []
+    users[username]["webauthn_credentials"].append(credential)
     _save_auth_data(data)
 
 
-def check_pin(pin: str) -> bool:
-    """Verify a PIN against stored credentials."""
-    data = _load_auth_data()
-    if "pin" not in data:
-        return False
-    return verify_pin(pin, data["pin"])
+# --- Challenge Management (in-memory, per pending request) ---
+
+# Temporary challenge store: challenge_token → {challenge, timestamp}
+_pending_challenges: dict[str, dict] = {}
 
 
-# --- WebAuthn Credential Storage ---
+def save_challenge(challenge: str) -> str:
+    """
+    Save a WebAuthn challenge. Returns a token to retrieve it later.
+    Challenges expire after 5 minutes.
+    """
+    # Clean up old challenges (> 5 min)
+    now = time.time()
+    expired = [k for k, v in _pending_challenges.items() if now - v["timestamp"] > 300]
+    for k in expired:
+        _pending_challenges.pop(k, None)
 
-def get_webauthn_credentials() -> list:
-    """Get stored WebAuthn credentials."""
-    data = _load_auth_data()
-    return data.get("webauthn_credentials", [])
-
-
-def save_webauthn_credential(credential: dict) -> None:
-    """Add a WebAuthn credential to storage."""
-    data = _load_auth_data()
-    if "webauthn_credentials" not in data:
-        data["webauthn_credentials"] = []
-    data["webauthn_credentials"].append(credential)
-    _save_auth_data(data)
-
-
-def get_webauthn_challenge() -> Optional[str]:
-    """Get current WebAuthn challenge (for verification)."""
-    data = _load_auth_data()
-    return data.get("current_challenge")
+    token = secrets.token_urlsafe(16)
+    _pending_challenges[token] = {"challenge": challenge, "timestamp": now}
+    return token
 
 
-def save_webauthn_challenge(challenge: str) -> None:
-    """Save current WebAuthn challenge for verification."""
-    data = _load_auth_data()
-    data["current_challenge"] = challenge
-    _save_auth_data(data)
+def get_challenge(token: str) -> Optional[str]:
+    """Retrieve and consume a pending challenge by token."""
+    entry = _pending_challenges.pop(token, None)
+    if not entry:
+        return None
+    # Check expiry (5 minutes)
+    if time.time() - entry["timestamp"] > 300:
+        return None
+    return entry["challenge"]
 
 
-def clear_webauthn_challenge() -> None:
-    """Clear the current WebAuthn challenge after use."""
-    data = _load_auth_data()
-    data.pop("current_challenge", None)
-    _save_auth_data(data)
+# Legacy compatibility — store challenge in session for authenticated flows
+def save_session_challenge(request: Request, challenge: str) -> None:
+    """Save a challenge linked to the current session (for registration)."""
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if session_id and session_id in _sessions:
+        _sessions[session_id]["challenge"] = challenge
 
 
-# --- Session Management (cookie-based) ---
+def get_session_challenge(request: Request) -> Optional[str]:
+    """Get and clear the challenge from the current session."""
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id or session_id not in _sessions:
+        return None
+    return _sessions[session_id].pop("challenge", None)
 
-# In-memory session store (simple dict — single-user, single-process)
-_sessions: dict[str, float] = {}
+
+# --- Session Management (cookie-based, multi-user) ---
+
+# Session store: session_id → {timestamp, username, challenge?}
+_sessions: dict[str, dict] = {}
 
 
-def create_session(response: Response) -> str:
-    """Create a new session and set the cookie on the response."""
+def create_session(response: Response, username: str) -> str:
+    """Create a new session for a specific user and set the cookie."""
     session_id = secrets.token_urlsafe(32)
-    _sessions[session_id] = time.time()
+    _sessions[session_id] = {
+        "timestamp": time.time(),
+        "username": username,
+    }
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
@@ -139,20 +219,34 @@ def is_authenticated(request: Request) -> bool:
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_id:
         return False
-    last_activity = _sessions.get(session_id)
-    if last_activity is None:
+    session = _sessions.get(session_id)
+    if session is None:
         return False
     # Check inactivity timeout
-    if time.time() - last_activity > SESSION_MAX_AGE:
+    if time.time() - session["timestamp"] > SESSION_MAX_AGE:
         _sessions.pop(session_id, None)
         return False
     # Refresh: reset the timer on activity
-    _sessions[session_id] = time.time()
+    session["timestamp"] = time.time()
     return True
 
 
-def logout(response: Response) -> None:
-    """Clear the session cookie and remove from store."""
+def get_current_user(request: Request) -> Optional[str]:
+    """Get the username of the currently authenticated user, or None."""
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id:
+        return None
+    session = _sessions.get(session_id)
+    if session is None:
+        return None
+    if time.time() - session["timestamp"] > SESSION_MAX_AGE:
+        return None
+    return session.get("username")
+
+
+def logout(request: Request, response: Response) -> None:
+    """Clear the specific user's session cookie and remove from store."""
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if session_id:
+        _sessions.pop(session_id, None)
     response.delete_cookie(SESSION_COOKIE_NAME)
-    # Clean up all sessions (single user — just clear everything)
-    _sessions.clear()

@@ -148,6 +148,7 @@ class Sending(Base):
     sent_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
     sent_via    = Column(Text, nullable=False)   # WA / EMAIL / PRINT
     note        = Column(Text, nullable=True)
+    performed_by = Column(Text, nullable=True)   # Username who performed the action
 
     voucher     = relationship("Voucher", back_populates="sendings")
 

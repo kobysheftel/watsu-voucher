@@ -1,16 +1,15 @@
 """
-Auth router — login, setup, WebAuthn registration/authentication endpoints.
+Auth router — multi-user login, WebAuthn registration/authentication.
 
 Routes:
-  GET  /auth/login              → login page (biometric + PIN)
-  POST /auth/login/pin          → PIN login
-  GET  /auth/setup              → first-time setup page
-  POST /auth/setup              → save PIN + redirect to biometric registration
-  GET  /auth/logout             → clear session, redirect to login
-  POST /auth/webauthn/register/options  → generate registration options
-  POST /auth/webauthn/register/verify   → verify registration response
-  POST /auth/webauthn/login/options     → generate authentication options
-  POST /auth/webauthn/login/verify      → verify authentication response
+  GET  /auth/login                        → login page (biometric + PIN)
+  POST /auth/login/pin                    → PIN login (identifies user by PIN)
+  GET  /auth/logout                       → clear session, redirect to login
+  GET  /auth/register-biometric           → biometric registration page (after PIN login)
+  POST /auth/webauthn/register/options    → generate registration options (per user)
+  POST /auth/webauthn/register/verify     → verify registration response (per user)
+  POST /auth/webauthn/login/options       → generate authentication options (all users)
+  POST /auth/webauthn/login/verify        → verify authentication response (identifies user)
 """
 
 import base64
@@ -49,11 +48,6 @@ RP_ID = "vouchers.soulwaves.org"
 RP_NAME = "Watsu Vouchers"
 ORIGIN = "https://vouchers.soulwaves.org"
 
-# Single user info
-USER_ID = b"admin"
-USER_NAME = "admin"
-USER_DISPLAY_NAME = "Admin"
-
 
 # ── GET: Login page ──────────────────────────────────────────────────────────
 
@@ -64,11 +58,10 @@ def login_page(request: Request):
     if auth.is_authenticated(request):
         return RedirectResponse(url="/all-vouchers/view", status_code=303)
 
-    # If not set up yet, redirect to setup
-    if not auth.is_setup_complete():
-        return RedirectResponse(url="/auth/setup", status_code=303)
+    # Check if any user has biometric credentials
+    all_creds = auth.get_all_webauthn_credentials()
+    has_biometric = len(all_creds) > 0
 
-    has_biometric = len(auth.get_webauthn_credentials()) > 0
     return templates.TemplateResponse("login.html", {
         "request": request,
         "has_biometric": has_biometric,
@@ -80,60 +73,43 @@ def login_page(request: Request):
 
 @router.post("/login/pin")
 def login_pin(request: Request, pin: str = Form(...)):
-    """Verify PIN and create session."""
-    if auth.check_pin(pin):
+    """Verify PIN — identifies which user by matching the PIN."""
+    username = auth.check_pin(pin)
+    if username:
         response = RedirectResponse(url="/all-vouchers/view", status_code=303)
-        auth.create_session(response)
+        auth.create_session(response, username)
         return response
     return RedirectResponse(url="/auth/login?error=pin", status_code=303)
 
 
-# ── GET: Setup page ──────────────────────────────────────────────────────────
+# ── GET: Biometric registration page (after PIN login) ────────────────────────
 
-@router.get("/setup", response_class=HTMLResponse)
-def setup_page(request: Request):
-    """First-time setup — set PIN code."""
-    # If already set up, redirect to login
-    if auth.is_setup_complete():
-        return RedirectResponse(url="/auth/login", status_code=303)
-
-    return templates.TemplateResponse("setup.html", {
-        "request": request,
-        "step": "pin",
-        "error": request.query_params.get("error"),
-    })
-
-
-# ── POST: Save PIN ───────────────────────────────────────────────────────────
-
-@router.post("/setup")
-def setup_save_pin(request: Request, pin: str = Form(...), pin_confirm: str = Form(...)):
-    """Save the PIN and redirect to biometric registration."""
-    # Validate PIN: 4-6 digits
-    if not pin.isdigit() or not (4 <= len(pin) <= 6):
-        return RedirectResponse(url="/auth/setup?error=format", status_code=303)
-    if pin != pin_confirm:
-        return RedirectResponse(url="/auth/setup?error=mismatch", status_code=303)
-
-    auth.save_pin(pin)
-    # Create session so user is logged in after setup
-    response = RedirectResponse(url="/auth/setup/biometric", status_code=303)
-    auth.create_session(response)
-    return response
-
-
-# ── GET: Biometric registration page (after PIN setup) ────────────────────────
-
-@router.get("/setup/biometric", response_class=HTMLResponse)
-def setup_biometric_page(request: Request):
-    """Page to register biometric credential after PIN setup."""
+@router.get("/register-biometric", response_class=HTMLResponse)
+def register_biometric_page(request: Request):
+    """Page to register biometric credential for the current user."""
     if not auth.is_authenticated(request):
         return RedirectResponse(url="/auth/login", status_code=303)
 
+    username = auth.get_current_user(request)
     return templates.TemplateResponse("setup.html", {
         "request": request,
         "step": "biometric",
+        "username": username,
     })
+
+
+# ── GET: Setup redirect (no more self-registration) ──────────────────────────
+
+@router.get("/setup", response_class=HTMLResponse)
+def setup_redirect(request: Request):
+    """Setup is no longer needed — redirect to login."""
+    return RedirectResponse(url="/auth/login", status_code=303)
+
+
+@router.post("/setup")
+def setup_post_redirect(request: Request):
+    """Setup POST is no longer needed — redirect to login."""
+    return RedirectResponse(url="/auth/login", status_code=303)
 
 
 # ── GET: Logout ───────────────────────────────────────────────────────────────
@@ -142,7 +118,7 @@ def setup_biometric_page(request: Request):
 def logout_route(request: Request):
     """Clear session and redirect to login."""
     response = RedirectResponse(url="/auth/login", status_code=303)
-    auth.logout(response)
+    auth.logout(request, response)
     return response
 
 
@@ -150,12 +126,16 @@ def logout_route(request: Request):
 
 @router.post("/webauthn/register/options")
 def webauthn_register_options(request: Request):
-    """Generate WebAuthn registration options."""
+    """Generate WebAuthn registration options for the current user."""
     if not auth.is_authenticated(request):
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
 
-    # Get existing credential IDs to exclude
-    existing = auth.get_webauthn_credentials()
+    username = auth.get_current_user(request)
+    if not username:
+        return JSONResponse({"error": "No user found"}, status_code=401)
+
+    # Get existing credential IDs for this user only
+    existing = auth.get_webauthn_credentials_for_user(username)
     exclude_credentials = [
         PublicKeyCredentialDescriptor(id=base64.urlsafe_b64decode(c["credential_id"] + "=="))
         for c in existing
@@ -164,9 +144,9 @@ def webauthn_register_options(request: Request):
     options = generate_registration_options(
         rp_id=RP_ID,
         rp_name=RP_NAME,
-        user_id=USER_ID,
-        user_name=USER_NAME,
-        user_display_name=USER_DISPLAY_NAME,
+        user_id=username.encode("utf-8"),
+        user_name=username,
+        user_display_name=username,
         exclude_credentials=exclude_credentials,
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.DISCOURAGED,
@@ -178,10 +158,9 @@ def webauthn_register_options(request: Request):
         ],
     )
 
-    # Save challenge for verification
-    auth.save_webauthn_challenge(
-        base64.urlsafe_b64encode(options.challenge).decode().rstrip("=")
-    )
+    # Save challenge in the session (authenticated user)
+    challenge_b64 = base64.urlsafe_b64encode(options.challenge).decode().rstrip("=")
+    auth.save_session_challenge(request, challenge_b64)
 
     return JSONResponse(json.loads(options_to_json(options)))
 
@@ -190,12 +169,16 @@ def webauthn_register_options(request: Request):
 
 @router.post("/webauthn/register/verify")
 async def webauthn_register_verify(request: Request):
-    """Verify WebAuthn registration response and save credential."""
+    """Verify WebAuthn registration response and save credential for current user."""
     if not auth.is_authenticated(request):
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
 
+    username = auth.get_current_user(request)
+    if not username:
+        return JSONResponse({"error": "No user found"}, status_code=401)
+
     body = await request.json()
-    challenge_b64 = auth.get_webauthn_challenge()
+    challenge_b64 = auth.get_session_challenge(request)
     if not challenge_b64:
         return JSONResponse({"error": "No challenge found"}, status_code=400)
 
@@ -211,7 +194,7 @@ async def webauthn_register_verify(request: Request):
             expected_rp_id=RP_ID,
         )
 
-        # Save the credential
+        # Save the credential for this user
         credential_data = {
             "credential_id": base64.urlsafe_b64encode(
                 verification.credential_id
@@ -221,13 +204,11 @@ async def webauthn_register_verify(request: Request):
             ).decode().rstrip("="),
             "sign_count": verification.sign_count,
         }
-        auth.save_webauthn_credential(credential_data)
-        auth.clear_webauthn_challenge()
+        auth.save_webauthn_credential(username, credential_data)
 
         return JSONResponse({"status": "ok"})
 
     except Exception as e:
-        auth.clear_webauthn_challenge()
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
@@ -235,16 +216,16 @@ async def webauthn_register_verify(request: Request):
 
 @router.post("/webauthn/login/options")
 def webauthn_login_options(request: Request):
-    """Generate WebAuthn authentication options."""
-    credentials = auth.get_webauthn_credentials()
-    if not credentials:
+    """Generate WebAuthn authentication options (all users' credentials)."""
+    all_creds = auth.get_all_webauthn_credentials()
+    if not all_creds:
         return JSONResponse({"error": "No credentials registered"}, status_code=400)
 
     allow_credentials = [
         PublicKeyCredentialDescriptor(
-            id=base64.urlsafe_b64decode(c["credential_id"] + "==")
+            id=base64.urlsafe_b64decode(cred["credential_id"] + "==")
         )
-        for c in credentials
+        for _, cred in all_creds
     ]
 
     options = generate_authentication_options(
@@ -253,36 +234,45 @@ def webauthn_login_options(request: Request):
         user_verification=UserVerificationRequirement.PREFERRED,
     )
 
-    # Save challenge for verification
-    auth.save_webauthn_challenge(
-        base64.urlsafe_b64encode(options.challenge).decode().rstrip("=")
-    )
+    # Save challenge in pending store (no session yet — user is logging in)
+    challenge_b64 = base64.urlsafe_b64encode(options.challenge).decode().rstrip("=")
+    token = auth.save_challenge(challenge_b64)
 
-    return JSONResponse(json.loads(options_to_json(options)))
+    # Return options + challenge token for verification
+    opts_json = json.loads(options_to_json(options))
+    opts_json["_challenge_token"] = token
+    return JSONResponse(opts_json)
 
 
 # ── WebAuthn: Authentication Verify ───────────────────────────────────────────
 
 @router.post("/webauthn/login/verify")
 async def webauthn_login_verify(request: Request):
-    """Verify WebAuthn authentication response and create session."""
+    """Verify WebAuthn authentication response and create session for matched user."""
     body = await request.json()
-    challenge_b64 = auth.get_webauthn_challenge()
+
+    # Retrieve challenge using token
+    challenge_token = body.pop("_challenge_token", None)
+    if not challenge_token:
+        return JSONResponse({"error": "No challenge token"}, status_code=400)
+
+    challenge_b64 = auth.get_challenge(challenge_token)
     if not challenge_b64:
-        return JSONResponse({"error": "No challenge found"}, status_code=400)
+        return JSONResponse({"error": "Challenge expired or not found"}, status_code=400)
 
-    credentials = auth.get_webauthn_credentials()
-
-    # Find the matching credential
+    # Find which user owns this credential
     credential_id_b64 = body.get("id", "")
+    all_creds = auth.get_all_webauthn_credentials()
+
+    matched_username = None
     matched_cred = None
-    for c in credentials:
-        if c["credential_id"] == credential_id_b64:
-            matched_cred = c
+    for username, cred in all_creds:
+        if cred["credential_id"] == credential_id_b64:
+            matched_username = username
+            matched_cred = cred
             break
 
     if not matched_cred:
-        auth.clear_webauthn_challenge()
         return JSONResponse({"error": "Unknown credential"}, status_code=400)
 
     try:
@@ -300,21 +290,19 @@ async def webauthn_login_verify(request: Request):
             credential_current_sign_count=matched_cred["sign_count"],
         )
 
-        # Update sign count
-        matched_cred["sign_count"] = verification.new_sign_count
+        # Update sign count in auth.json
         data = auth._load_auth_data()
-        for i, c in enumerate(data.get("webauthn_credentials", [])):
+        user_creds = data.get("users", {}).get(matched_username, {}).get("webauthn_credentials", [])
+        for c in user_creds:
             if c["credential_id"] == credential_id_b64:
-                data["webauthn_credentials"][i]["sign_count"] = verification.new_sign_count
+                c["sign_count"] = verification.new_sign_count
                 break
         auth._save_auth_data(data)
-        auth.clear_webauthn_challenge()
 
-        # Create session
-        response = JSONResponse({"status": "ok"})
-        auth.create_session(response)
+        # Create session for the matched user
+        response = JSONResponse({"status": "ok", "username": matched_username})
+        auth.create_session(response, matched_username)
         return response
 
     except Exception as e:
-        auth.clear_webauthn_challenge()
         return JSONResponse({"error": str(e)}, status_code=400)

@@ -240,7 +240,7 @@ async function shareVoucher(via) {
     {% for s in voucher.sendings %}
     <li class="list-group-item small py-2">
       <div class="d-flex justify-content-between">
-        <span>{{ s.sent_via_display }}</span>
+        <span>{{ s.sent_via_display }}{% if s.performed_by %} <span class="text-secondary">({{ s.performed_by }})</span>{% endif %}</span>
         <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
       </div>
       {% if s.note %}

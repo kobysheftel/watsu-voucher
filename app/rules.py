@@ -176,7 +176,8 @@ def _voucher_dir(voucher: Voucher) -> Path:
 # ── First send (draft → sent) ─────────────────────────────────────────────────
 
 def first_send(db: Session, voucher_id: str,
-               sent_via: str, note: str | None = None) -> Voucher:
+               sent_via: str, note: str | None = None,
+               performed_by: str | None = None) -> Voucher:
     """
     Execute the full first-send sequence:
       1. Validate state (must be draft)
@@ -222,6 +223,7 @@ def first_send(db: Session, voucher_id: str,
         sent_at=now,
         sent_via=sent_via,
         note=note,
+        performed_by=performed_by,
     )
     db.add(sending)
 
@@ -233,7 +235,8 @@ def first_send(db: Session, voucher_id: str,
 # ── Resend (sent → sent) ──────────────────────────────────────────────────────
 
 def resend(db: Session, voucher_id: str,
-           sent_via: str, note: str | None = None) -> Voucher:
+           sent_via: str, note: str | None = None,
+           performed_by: str | None = None) -> Voucher:
     """
     Resend a voucher that has already been sent:
       1. Validate state (must be sent, not used)
@@ -269,6 +272,7 @@ def resend(db: Session, voucher_id: str,
         sent_at=utcnow(),
         sent_via=sent_via,
         note=note,
+        performed_by=performed_by,
     )
     db.add(sending)
 

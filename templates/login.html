@@ -98,7 +98,7 @@
            inputmode="numeric"
            pattern="[0-9]{4,6}"
            maxlength="6"
-           placeholder="••••"
+           placeholder="•••••"
            autocomplete="current-password"
            required/>
     <button type="submit" class="btn btn-outline-primary w-100">כניסה</button>
@@ -142,7 +142,9 @@ async function startBiometricLogin() {
     if (!optRes.ok) throw new Error('Failed to get options');
     const options = await optRes.json();
 
-    // 2. Convert base64url fields to ArrayBuffer for WebAuthn API
+    // 2. Save challenge token for verification, then convert fields
+    var challengeToken = options._challenge_token;
+    delete options._challenge_token;
     options.challenge = base64urlToBuffer(options.challenge);
     if (options.allowCredentials) {
       options.allowCredentials = options.allowCredentials.map(c => ({
@@ -154,11 +156,12 @@ async function startBiometricLogin() {
     // 3. Call browser WebAuthn API
     const assertion = await navigator.credentials.get({ publicKey: options });
 
-    // 4. Encode response for server
+    // 4. Encode response for server (include challenge token)
     const body = {
       id: bufferToBase64url(assertion.rawId),
       rawId: bufferToBase64url(assertion.rawId),
       type: assertion.type,
+      _challenge_token: challengeToken,
       response: {
         authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
         clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),

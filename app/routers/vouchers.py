@@ -17,10 +17,12 @@ from pathlib import Path
 from typing import Optional
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
+
+from app import auth as auth_module
 
 from app.database import get_db
 from app.models import Voucher, Sending
@@ -130,13 +132,15 @@ def update_voucher(voucher_id: str, body: VoucherUpdate,
 
 @router.put("/{voucher_id}/send", response_model=VoucherOut)
 def send_voucher(voucher_id: str, body: SendRequest,
-                 db: Session = Depends(get_db)):
+                 request: Request, db: Session = Depends(get_db)):
     """
     First send: cement holder details, generate QR + PDF, log, set status=sent.
     Can only be called on a draft voucher.
     """
+    username = auth_module.get_current_user(request)
     try:
-        voucher = rules.first_send(db, voucher_id, body.sent_via, body.note)
+        voucher = rules.first_send(db, voucher_id, body.sent_via, body.note,
+                                   performed_by=username)
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return VoucherOut.model_validate(voucher)
@@ -146,13 +150,15 @@ def send_voucher(voucher_id: str, body: SendRequest,
 
 @router.put("/{voucher_id}/resend", response_model=VoucherOut)
 def resend_voucher(voucher_id: str, body: SendRequest,
-                   db: Session = Depends(get_db)):
+                   request: Request, db: Session = Depends(get_db)):
     """
     Resend: reuse original QR, regenerate PDF, log new send event.
     Can only be called on a sent voucher.
     """
+    username = auth_module.get_current_user(request)
     try:
-        voucher = rules.resend(db, voucher_id, body.sent_via, body.note)
+        voucher = rules.resend(db, voucher_id, body.sent_via, body.note,
+                               performed_by=username)
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return VoucherOut.model_validate(voucher)

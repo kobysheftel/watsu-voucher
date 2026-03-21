@@ -41,13 +41,13 @@ def client():
 
     app.dependency_overrides[get_db] = override_get_db
 
-    # Set up auth so middleware lets requests through
+    # Set up multi-user auth so middleware lets requests through
     from app import auth as _auth
-    _auth.save_pin("1234")  # create a PIN so setup is "complete"
+    _auth.init_auth()  # creates auth.json with Koby + Avigal
 
     with TestClient(app) as c:
-        # Create a valid session via PIN login
-        c.post("/auth/login/pin", data={"pin": "1234"})
+        # Create a valid session via PIN login (Koby's PIN)
+        c.post("/auth/login/pin", data={"pin": "122156"})
         yield c
 
     app.dependency_overrides.clear()
@@ -252,6 +252,17 @@ def test_sending_display_labels(client):
     s = r.json()[0]
     assert s["sent_via_display"] == "📱 וואטסאפ"
 
+def test_sending_performed_by(client):
+    """Sending history records which user performed the action."""
+    make_holder(client)
+    v = make_voucher(client)
+    vid = v["voucher_id"]
+    client.put(f"/vouchers/{vid}/send", json={"sent_via": "WA"})
+
+    r = client.get(f"/vouchers/{vid}/sendings")
+    s = r.json()[0]
+    assert s["performed_by"] == "Koby"  # Logged in as Koby in fixture
+
 
 # ── Search & Report ───────────────────────────────────────────────────────────
 
@@ -291,3 +302,26 @@ def test_home_data(client):
     assert stats["total"]   == 1
     assert stats["draft"]   == 1
     assert stats["holders"] == 1
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+def test_login_wrong_pin(client):
+    """Wrong PIN returns error redirect."""
+    from app import auth as _auth
+    _auth._sessions.clear()  # clear all sessions first
+    r = client.post("/auth/login/pin", data={"pin": "9999"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "error=pin" in r.headers["location"]
+
+def test_login_koby(client):
+    """Koby can log in with his PIN."""
+    r = client.post("/auth/login/pin", data={"pin": "122156"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "/all-vouchers" in r.headers["location"]
+
+def test_login_avigal(client):
+    """Avigal can log in with her PIN."""
+    r = client.post("/auth/login/pin", data={"pin": "40689"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "/all-vouchers" in r.headers["location"]

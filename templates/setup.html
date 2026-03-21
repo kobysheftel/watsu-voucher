@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <meta name="theme-color" content="#2a7f8e"/>
-  <title>הגדרה ראשונית — גלים ונפש</title>
+  <title>רישום ביומטרי — גלים ונפש</title>
 
   <!-- Bootstrap 5 RTL -->
   <link rel="stylesheet"
@@ -42,83 +42,16 @@
       margin-bottom: 1.5rem;
       font-size: 0.9rem;
     }
-    .pin-input {
-      text-align: center;
-      font-size: 1.5rem;
-      letter-spacing: 0.5rem;
-      font-weight: 700;
-    }
-    .step-badge {
-      background: #2a7f8e;
-      color: #fff;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 0.9rem;
-      margin-left: 0.5rem;
-    }
   </style>
 </head>
 <body>
 
 <div class="setup-card">
-  <div class="setup-title">🌊 הגדרה ראשונית</div>
+  <div class="setup-title">🔒 רישום אימות ביומטרי</div>
 
-  {% if step == "pin" %}
-  <!-- ── Step 1: PIN Setup ── -->
   <div class="setup-sub">
-    <span class="step-badge">1</span>
-    הגדר קוד PIN (4-6 ספרות)
+    שלום {{ username }} — הוסף טביעת אצבע, זיהוי פנים או Windows Hello לכניסה מהירה
   </div>
-
-  {% if error == "format" %}
-  <div class="alert alert-danger">קוד PIN חייב להכיל 4-6 ספרות</div>
-  {% elif error == "mismatch" %}
-  <div class="alert alert-danger">הקודות לא תואמים</div>
-  {% endif %}
-
-  <form method="post" action="/auth/setup">
-    <div class="mb-3">
-      <label class="form-label">קוד PIN</label>
-      <input type="password"
-             name="pin"
-             class="form-control pin-input"
-             inputmode="numeric"
-             pattern="[0-9]{4,6}"
-             maxlength="6"
-             placeholder="••••"
-             autocomplete="new-password"
-             required/>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">אימות קוד PIN</label>
-      <input type="password"
-             name="pin_confirm"
-             class="form-control pin-input"
-             inputmode="numeric"
-             pattern="[0-9]{4,6}"
-             maxlength="6"
-             placeholder="••••"
-             autocomplete="new-password"
-             required/>
-    </div>
-    <button type="submit" class="btn btn-primary w-100">המשך</button>
-  </form>
-
-  {% elif step == "biometric" %}
-  <!-- ── Step 2: Biometric Registration ── -->
-  <div class="setup-sub">
-    <span class="step-badge">2</span>
-    רישום אימות ביומטרי (אופציונלי)
-  </div>
-
-  <p class="text-muted text-center" style="font-size:0.85rem;">
-    הוסף טביעת אצבע, זיהוי פנים או Windows Hello לכניסה מהירה
-  </p>
 
   <button id="registerBtn" class="btn btn-primary w-100 mb-3" style="padding:1rem; font-size:1.1rem; border-radius:12px;"
           onclick="startBiometricRegistration()">
@@ -130,14 +63,11 @@
   <a href="/all-vouchers/view" class="btn btn-outline-secondary w-100" id="skipBtn">
     דלג — כניסה עם PIN בלבד
   </a>
-
-  {% endif %}
 </div>
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-{% if step == "biometric" %}
 <script>
 // Helper: base64url decode to ArrayBuffer
 function base64urlToBuffer(base64url) {
@@ -227,7 +157,6 @@ async function startBiometricRegistration() {
   }
 }
 </script>
-{% endif %}
 
 </body>
 </html>

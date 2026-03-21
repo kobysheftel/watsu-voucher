@@ -31,13 +31,15 @@ Path("static").mkdir(exist_ok=True)
 # --- Lifespan: replaces deprecated @app.on_event("startup") ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()   # create DB tables on startup
-    yield       # app runs here
+    init_db()       # create DB tables on startup
+    auth.init_auth()  # ensure multi-user auth.json exists
+    yield           # app runs here
 
 
 # --- Auth Middleware — protect all routes except /auth/* and static files ---
 class AuthMiddleware(BaseHTTPMiddleware):
-    """Redirect unauthenticated requests to login page."""
+    """Redirect unauthenticated requests to login page.
+    Also injects current username into request.state for templates."""
 
     # Paths that don't require authentication
     PUBLIC_PREFIXES = ("/auth/", "/static/", "/assets/", "/docs", "/openapi.json")
@@ -49,13 +51,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)
 
-        # If setup not complete, redirect to setup
-        if not auth.is_setup_complete():
-            return RedirectResponse(url="/auth/setup", status_code=303)
-
         # If not authenticated, redirect to login
         if not auth.is_authenticated(request):
             return RedirectResponse(url="/auth/login", status_code=303)
+
+        # Inject current username into request.state for templates
+        request.state.username = auth.get_current_user(request)
 
         return await call_next(request)
 

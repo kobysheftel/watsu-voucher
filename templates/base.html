@@ -58,6 +58,11 @@
         <li class="nav-item"><a class="nav-link" href="/orderers/view">מזמינים</a></li>
         <li class="nav-item"><a class="nav-link" href="/all-vouchers/view">שוברים</a></li>
         <li class="nav-item"><a class="nav-link" href="/report/view">דוח</a></li>
+        {% if request.state.username %}
+        <li class="nav-item">
+          <span class="nav-link text-light opacity-75">שלום, {{ request.state.username }}</span>
+        </li>
+        {% endif %}
         <li class="nav-item"><a class="nav-link text-warning" href="/auth/logout">יציאה</a></li>
       </ul>
     </div>

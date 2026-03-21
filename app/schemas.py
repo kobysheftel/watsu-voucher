@@ -109,6 +109,7 @@ class SendingOut(BaseModel):
     sent_via: str
     sent_via_display: str   # computed property from model
     note: Optional[str]
+    performed_by: Optional[str] = None  # Username who performed the action
 
     model_config = {"from_attributes": True}
 

@@ -96,3 +96,32 @@ vouchers/
 ## Conflict Check Rule
 Before changing any config file, model, or rule — read it first,
 identify conflicts, present them, wait for approval.
+
+## Generated Doc Summary
+
+**Generated:** 2026-03-21
+**Files:** `PROJECT_DOC.md` (root + `docs/`)
+
+### Modules Documented
+- `main.py` — FastAPI entry point, auth middleware
+- `app/database.py` — SQLAlchemy engine, session, init
+- `app/models.py` — Holder, Voucher, Sending ORM models
+- `app/schemas.py` — Pydantic request/response schemas
+- `app/rules.py` — Business rules engine (cement, send, resend, mark used)
+- `app/qr_module.py` — Fernet-encrypted QR generation
+- `app/pdf_module.py` — Reportlab A5 PDF generation with Hebrew/bidi
+- `app/auth.py` — PIN + WebAuthn authentication, sessions
+- `app/utils.py` — Utility functions
+- `app/routers/auth.py` — Auth routes (login, setup, WebAuthn)
+- `app/routers/holders.py` — Holder CRUD endpoints
+- `app/routers/vouchers.py` — Voucher CRUD + send/resend/use + file serving
+- `app/routers/reports.py` — Search, report, CSV export, dashboard stats
+- `app/routers/pages.py` — HTML page routes (Jinja2 server-side rendered)
+
+### HTML Pages Documented
+- `base.html`, `all_vouchers.html`, `home.html`, `new_voucher.html`
+- `holder.html`, `voucher_view.html`, `orderers.html`, `report.html`
+- `login.html`, `setup.html`, `voucher_pdf.html`
+
+### Assumptions Flagged
+- None — all code and functionality verified from source

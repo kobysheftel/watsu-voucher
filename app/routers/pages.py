@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Holder, Voucher
 from app import rules
+from app import auth as auth_module
 
 router    = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="templates")
@@ -336,6 +337,7 @@ async def form_create_voucher_full(
 @router.post("/form/vouchers/{voucher_id}/send")
 async def form_send_voucher(
     voucher_id: str,
+    request:    Request,
     sent_via:   str           = Form(...),
     note:       Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -344,12 +346,15 @@ async def form_send_voucher(
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         return _flash("/home", f"שובר לא נמצא: {voucher_id}", "danger")
+    username = auth_module.get_current_user(request)
     try:
         if voucher.status == "draft":
-            rules.first_send(db, voucher_id, sent_via, note or None)
+            rules.first_send(db, voucher_id, sent_via, note or None,
+                             performed_by=username)
             msg = "השובר נשלח בהצלחה"
         else:
-            rules.resend(db, voucher_id, sent_via, note or None)
+            rules.resend(db, voucher_id, sent_via, note or None,
+                         performed_by=username)
             msg = "השובר נשלח מחדש"
 
         # Refresh voucher to get cemented mobile
