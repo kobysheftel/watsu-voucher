@@ -84,6 +84,9 @@ class Voucher(Base):
     # Status: draft / sent / used
     status          = Column(Text, nullable=False, default="draft")
 
+    # Display name on voucher PDF (optional — if empty, uses holder_name)
+    display_name    = Column(Text, nullable=True)
+
     # Manual accounting fields (editable until status=used)
     receipt_number  = Column(Text, nullable=True)
     receipt_date    = Column(Date, nullable=True)

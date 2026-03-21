@@ -112,7 +112,8 @@ def next_sequence(db: Session, mobile: str) -> int:
 def create_voucher(db: Session, mobile: str, voucher_type: str,
                    valid_until: date, receipt_number: str | None = None,
                    receipt_date: date | None = None,
-                   notes: str | None = None) -> Voucher:
+                   notes: str | None = None,
+                   display_name: str | None = None) -> Voucher:
     """
     Create a new draft voucher for an existing holder.
     Raises RulesError if holder does not exist.
@@ -135,6 +136,7 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
         receipt_number=receipt_number,
         receipt_date=receipt_date,
         notes=notes,
+        display_name=display_name,
     )
     db.add(voucher)
     db.commit()

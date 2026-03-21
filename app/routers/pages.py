@@ -296,6 +296,7 @@ async def form_create_voucher_full(
     receipt_number: Optional[str] = Form(None),
     receipt_date:   Optional[str] = Form(None),
     notes:          Optional[str] = Form(None),
+    display_name:   Optional[str] = Form(None),
     is_new_orderer: str           = Form("0"),
     new_name:       Optional[str] = Form(None),
     new_email:      Optional[str] = Form(None),
@@ -321,6 +322,7 @@ async def form_create_voucher_full(
             receipt_number = receipt_number or None,
             receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
             notes          = notes or None,
+            display_name   = display_name or None,
         )
         return _flash(f"/vouchers/{v.voucher_id}/view", "השובר נוצר בהצלחה")
     except rules.RulesError as e:
