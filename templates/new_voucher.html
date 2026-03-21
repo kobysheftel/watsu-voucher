@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}שובר חדש — גלים ונפש{% endblock %}
+
+{% block extra_css %}
+.field-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.field-label {
+  min-width: 90px;
+  text-align: right;
+  font-size: .85rem;
+  color: #666;
+  flex-shrink: 0;
+}
+.field-value { flex: 1; }
+.field-value input, .field-value select, .field-value textarea { width: 100%; }
+
+/* Orderer search result card */
+#ordererResult {
+  border: 2px solid #198754;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f0fdf4;
+  display: none;
+}
+#ordererNotFound {
+  display: none;
+}
+
+@media (max-width: 576px) {
+  .field-row { flex-direction: column; align-items: stretch; gap: 2px; }
+  .field-label { text-align: right; min-width: auto; }
+}
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/all-vouchers/view">שוברים</a></li>
+    <li class="breadcrumb-item active">שובר חדש</li>
+  </ol>
+</nav>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header">
+    <h5 class="mb-0">שובר חדש</h5>
+  </div>
+  <div class="card-body">
+
+    <!-- Step 1: Find orderer -->
+    <h6 class="text-muted mb-2">פרטי המזמין</h6>
+
+    <div class="field-row">
+      <span class="field-label">טלפון</span>
+      <span class="field-value d-flex gap-2">
+        <input type="text" id="searchMobile" class="form-control"
+               placeholder="הקש מספר טלפון..." maxlength="10"
+               oninput="searchOrderer(this.value)"/>
+        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
+                data-bs-toggle="collapse" data-bs-target="#ordererList">
+          בחר מרשימה
+        </button>
+      </span>
+    </div>
+
+    <!-- Dropdown list of existing orderers (collapsed) -->
+    <div class="collapse mb-3" id="ordererList">
+      <div class="list-group" style="max-height: 200px; overflow-y: auto;">
+        {% for h in all_holders %}
+        <button type="button" class="list-group-item list-group-item-action small"
+                onclick="selectOrderer('{{ h.mobile }}', '{{ h.name }}', '{{ h.email or '' }}')">
+          <strong>{{ h.name }}</strong> — {{ h.mobile }}
+          {% if h.email %}<span class="text-muted"> ({{ h.email }})</span>{% endif %}
+        </button>
+        {% endfor %}
+        {% if not all_holders %}
+        <div class="list-group-item text-muted small">אין מזמינים עדיין</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Found orderer display -->
+    <div id="ordererResult" class="mb-3">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-bold" id="foundName"></div>
+          <div class="text-muted" id="foundMobile"></div>
+          <div class="text-muted small" id="foundEmail"></div>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="clearOrderer()">שנה</button>
+      </div>
+    </div>
+
+    <!-- Not found: create new orderer -->
+    <div id="ordererNotFound" class="mb-3">
+      <div class="alert alert-info py-2 mb-2 small">
+        מזמין לא נמצא — מלא את הפרטים ליצירת מזמין חדש
+      </div>
+      <div class="field-row">
+        <span class="field-label">שם מלא *</span>
+        <span class="field-value">
+          <input type="text" id="newName" class="form-control" required/>
+        </span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">מייל</span>
+        <span class="field-value">
+          <input type="email" id="newEmail" class="form-control"/>
+        </span>
+      </div>
+    </div>
+
+    <hr class="my-3"/>
+
+    <!-- Step 2: Voucher details -->
+    <h6 class="text-muted mb-2">פרטי השובר</h6>
+
+    <form id="voucherForm" method="post" action="/form/vouchers/new-full">
+
+      <input type="hidden" name="mobile" id="formMobile"/>
+      <input type="hidden" name="new_name" id="formNewName"/>
+      <input type="hidden" name="new_email" id="formNewEmail"/>
+      <input type="hidden" name="is_new_orderer" id="formIsNew" value="0"/>
+
+      <div class="field-row">
+        <span class="field-label">סוג שובר *</span>
+        <span class="field-value">
+          <select name="voucher_type" class="form-select" required>
+            <option value="יחיד">יחיד</option>
+            <option value="זוגי">זוגי</option>
+          </select>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">תוקף עד *</span>
+        <span class="field-value">
+          <input type="date" name="valid_until" class="form-control"
+                 min="{{ today }}" value="{{ default_expiry }}" required/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">מס׳ קבלה</span>
+        <span class="field-value">
+          <input type="text" name="receipt_number" class="form-control"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">תאריך קבלה</span>
+        <span class="field-value">
+          <input type="date" name="receipt_date" class="form-control" value="{{ today }}"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">הערות</span>
+        <span class="field-value">
+          <textarea name="notes" class="form-control" rows="2"></textarea>
+        </span>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-success btn-lg flex-fill" id="submitBtn" disabled>
+          צור שובר
+        </button>
+        <a href="/all-vouchers/view" class="btn btn-outline-secondary btn-lg">ביטול</a>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+<script>
+var selectedMobile = '';
+var isNewOrderer = false;
+
+// Search orderer by phone as user types
+function searchOrderer(phone) {
+  phone = phone.replace(/[\s\-]/g, '');
+  if (phone.length < 3) {
+    document.getElementById('ordererResult').style.display = 'none';
+    document.getElementById('ordererNotFound').style.display = 'none';
+    updateSubmitState();
+    return;
+  }
+
+  // Search via API
+  fetch('/holders/' + phone)
+    .then(function(r) {
+      if (r.ok) return r.json();
+      throw new Error('not found');
+    })
+    .then(function(data) {
+      // Found
+      selectOrderer(data.holder.mobile, data.holder.name, data.holder.email || '');
+    })
+    .catch(function() {
+      // Not found — only show "create new" when full 10-digit phone entered
+      if (/^05\d{8}$/.test(phone)) {
+        document.getElementById('ordererResult').style.display = 'none';
+        document.getElementById('ordererNotFound').style.display = 'block';
+        selectedMobile = phone;
+        isNewOrderer = true;
+        document.getElementById('formMobile').value = phone;
+        document.getElementById('formIsNew').value = '1';
+        // Collapse the list if open
+        var listEl = document.getElementById('ordererList');
+        if (listEl.classList.contains('show')) {
+          bootstrap.Collapse.getInstance(listEl)?.hide();
+        }
+      } else {
+        document.getElementById('ordererNotFound').style.display = 'none';
+      }
+      updateSubmitState();
+    });
+}
+
+function selectOrderer(mobile, name, email) {
+  selectedMobile = mobile;
+  isNewOrderer = false;
+
+  document.getElementById('foundName').textContent = name;
+  document.getElementById('foundMobile').textContent = mobile;
+  document.getElementById('foundEmail').textContent = email;
+  document.getElementById('ordererResult').style.display = 'block';
+  document.getElementById('ordererNotFound').style.display = 'none';
+
+  document.getElementById('searchMobile').value = mobile;
+  document.getElementById('formMobile').value = mobile;
+  document.getElementById('formIsNew').value = '0';
+
+  // Collapse the list if open
+  var listEl = document.getElementById('ordererList');
+  if (listEl.classList.contains('show')) {
+    bootstrap.Collapse.getInstance(listEl)?.hide();
+  }
+
+  updateSubmitState();
+}
+
+function clearOrderer() {
+  selectedMobile = '';
+  isNewOrderer = false;
+  document.getElementById('searchMobile').value = '';
+  document.getElementById('ordererResult').style.display = 'none';
+  document.getElementById('ordererNotFound').style.display = 'none';
+  document.getElementById('formMobile').value = '';
+  document.getElementById('formIsNew').value = '0';
+  document.getElementById('searchMobile').focus();
+  updateSubmitState();
+}
+
+function updateSubmitState() {
+  var btn = document.getElementById('submitBtn');
+  if (selectedMobile && !isNewOrderer) {
+    btn.disabled = false;
+  } else if (isNewOrderer) {
+    btn.disabled = false;
+  } else {
+    btn.disabled = true;
+  }
+}
+
+// Before submit — copy new orderer fields to hidden inputs
+document.getElementById('voucherForm').addEventListener('submit', function(e) {
+  if (isNewOrderer) {
+    var name = document.getElementById('newName').value.trim();
+    if (!name) {
+      e.preventDefault();
+      alert('יש למלא שם מזמין');
+      return;
+    }
+    document.getElementById('formNewName').value = name;
+    document.getElementById('formNewEmail').value = document.getElementById('newEmail').value.trim();
+  }
+});
+</script>
+
+{% endblock %}

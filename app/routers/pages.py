@@ -118,6 +118,20 @@ def orderers_page(request: Request, db: Session = Depends(get_db)):
     })
 
 
+# ── GET: New voucher page ────────────────────────────────────────────────────
+
+@router.get("/vouchers/new/view", response_class=HTMLResponse)
+def new_voucher_page(request: Request, db: Session = Depends(get_db)):
+    """Full-page new voucher form with orderer search/create."""
+    all_holders = db.query(Holder).order_by(Holder.name).all()
+    return templates.TemplateResponse("new_voucher.html", {
+        "request":        request,
+        "all_holders":    all_holders,
+        "today":          date.today().isoformat(),
+        "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
+    })
+
+
 # ── GET: All vouchers page ──────────────────────────────────────────────────
 
 @router.get("/all-vouchers/view", response_class=HTMLResponse)
@@ -270,6 +284,49 @@ async def form_create_voucher(
         return _flash(f"/holders/{mobile}/view", str(e), "danger")
     except ValueError as e:
         return _flash(f"/holders/{mobile}/view", f"תאריך לא תקין: {e}", "danger")
+
+
+# ── POST: Create voucher (full flow — creates orderer if needed) ─────────────
+
+@router.post("/form/vouchers/new-full")
+async def form_create_voucher_full(
+    mobile:         str           = Form(...),
+    voucher_type:   str           = Form(...),
+    valid_until:    str           = Form(...),
+    receipt_number: Optional[str] = Form(None),
+    receipt_date:   Optional[str] = Form(None),
+    notes:          Optional[str] = Form(None),
+    is_new_orderer: str           = Form("0"),
+    new_name:       Optional[str] = Form(None),
+    new_email:      Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Create orderer (if new) + draft voucher, redirect to voucher detail."""
+    try:
+        # Create orderer if needed
+        if is_new_orderer == "1" and new_name:
+            rules.get_or_create_holder(db, mobile, new_name, new_email or None)
+
+        # Validate date
+        parsed_date = date.fromisoformat(valid_until)
+        if parsed_date < date.today():
+            return _flash("/vouchers/new/view",
+                          "תאריך תוקף לא יכול להיות בעבר", "danger")
+
+        v = rules.create_voucher(
+            db,
+            mobile       = mobile,
+            voucher_type = voucher_type,
+            valid_until  = parsed_date,
+            receipt_number = receipt_number or None,
+            receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
+            notes          = notes or None,
+        )
+        return _flash(f"/vouchers/{v.voucher_id}/view", "השובר נוצר בהצלחה")
+    except rules.RulesError as e:
+        return _flash("/vouchers/new/view", str(e), "danger")
+    except ValueError as e:
+        return _flash("/vouchers/new/view", f"שגיאה: {e}", "danger")
 
 
 # ── POST: Send / Resend voucher ───────────────────────────────────────────────

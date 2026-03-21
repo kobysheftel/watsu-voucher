@@ -22,12 +22,7 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h4 class="mb-0">שוברים ({{ vouchers | length }})</h4>
   <div class="d-flex gap-2">
-    {% if all_holders %}
-    <button class="btn btn-success btn-lg"
-            data-bs-toggle="modal" data-bs-target="#newVoucherModal">
-      + שובר חדש
-    </button>
-    {% endif %}
+    <a href="/vouchers/new/view" class="btn btn-success btn-lg">+ שובר חדש</a>
     <a href="/report?fmt=csv" class="btn btn-outline-secondary">⬇️ CSV</a>
   </div>
 </div>
@@ -89,78 +84,14 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
       {% else %}
       <tr>
         <td colspan="8" class="text-center text-muted py-4">
-          אין שוברים עדיין
-          {% if all_holders %}
-          — <button class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#newVoucherModal">צור שובר ראשון</button>
-          {% endif %}
+          אין שוברים עדיין —
+          <a href="/vouchers/new/view" class="btn btn-link p-0">צור שובר ראשון</a>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-
-
-<!-- ── New Voucher Modal ──────────────────────────────────────────────────── -->
-{% if all_holders %}
-<div class="modal fade" id="newVoucherModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">שובר חדש</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <form method="post" action="/form/vouchers/new">
-        <div class="modal-body">
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">מזמין</label>
-            <select name="mobile" class="form-select" required>
-              {% for h in all_holders %}
-              <option value="{{ h.mobile }}">{{ h.name }} ({{ h.mobile }})</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">סוג שובר</label>
-            <select name="voucher_type" class="form-select" required>
-              <option value="יחיד">יחיד</option>
-              <option value="זוגי">זוגי</option>
-            </select>
-          </div>
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">תוקף עד</label>
-            <input type="date" name="valid_until" class="form-control"
-                   min="{{ today }}" value="{{ default_expiry }}" required/>
-          </div>
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">מס׳ קבלה</label>
-            <input type="text" name="receipt_number" class="form-control"/>
-          </div>
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">תאריך קבלה</label>
-            <input type="date" name="receipt_date" class="form-control" value="{{ today }}"/>
-          </div>
-
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label mb-0" style="min-width:80px;text-align:right;">הערות</label>
-            <textarea name="notes" class="form-control" rows="2"></textarea>
-          </div>
-
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
-          <button type="submit" class="btn btn-success">צור שובר</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 
 
 <script>
