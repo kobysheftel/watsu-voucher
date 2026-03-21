@@ -163,28 +163,13 @@ hr { margin: 8px 0; }
 <!-- Action buttons -->
 <div class="action-btns">
   {% if voucher.status == 'draft' %}
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
-      <input type="hidden" name="sent_via" value="WA"/>
-      <button type="submit" class="btn btn-success">📱 שלח בווטסאפ</button>
-    </form>
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
-      <input type="hidden" name="sent_via" value="EMAIL"/>
-      <button type="submit" class="btn btn-info text-white">📧 שלח במייל</button>
-    </form>
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
-      <input type="hidden" name="sent_via" value="PRINT"/>
-      <button type="submit" class="btn btn-secondary">🖨️ הדפס</button>
-    </form>
+    <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 שלח בווטסאפ</button>
+    <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 שלח במייל</button>
+    <button type="button" class="btn btn-secondary" onclick="shareVoucher('PRINT')">🖨️ הדפס</button>
 
   {% elif voucher.status == 'sent' %}
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
-      <input type="hidden" name="sent_via" value="WA"/>
-      <button type="submit" class="btn btn-success">📱 ווטסאפ</button>
-    </form>
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/send" class="d-contents">
-      <input type="hidden" name="sent_via" value="EMAIL"/>
-      <button type="submit" class="btn btn-info text-white">📧 מייל</button>
-    </form>
+    <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 ווטסאפ</button>
+    <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 מייל</button>
     {% if voucher.pdf_path %}
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
        class="btn btn-secondary">🖨️ הדפס</a>
@@ -203,6 +188,50 @@ hr { margin: 8px 0; }
   {% endif %}
 </div>
 
+<!-- Share logic: native share on mobile, fallback on desktop -->
+<script>
+async function shareVoucher(via) {
+  var voucherId = '{{ voucher.voucher_id }}';
+
+  // First: record the send/resend on server
+  var formData = new FormData();
+  formData.append('sent_via', via);
+  await fetch('/form/vouchers/' + voucherId + '/send', {method: 'POST', body: formData});
+
+  // Try native share (works on mobile)
+  if (via === 'WA' && navigator.share) {
+    try {
+      var response = await fetch('/vouchers/' + voucherId + '/pdf');
+      var blob = await response.blob();
+      var file = new File([blob], voucherId + '.pdf', {type: 'application/pdf'});
+
+      if (navigator.canShare && navigator.canShare({files: [file]})) {
+        await navigator.share({
+          title: 'שובר מתנה — גלים ונפש',
+          text: 'שובר מתנה מגלים ונפש',
+          files: [file]
+        });
+        location.reload();
+        return;
+      }
+    } catch (e) {
+      // User cancelled or share failed — continue to fallback
+    }
+  }
+
+  // Fallback: open WhatsApp link (desktop) or reload
+  if (via === 'WA') {
+    var mobile = '{{ voucher.holder_mobile or voucher.mobile }}';
+    if (mobile) {
+      var intl = '972' + mobile.substring(1);
+      window.open('https://wa.me/' + intl + '?text=' + encodeURIComponent('שובר מתנה מגלים ונפש'), '_blank');
+    }
+  }
+
+  location.reload();
+}
+</script>
+
 <!-- Sending history -->
 {% if voucher.sendings %}
 <div class="card shadow-sm">
@@ -220,34 +249,6 @@ hr { margin: 8px 0; }
     </li>
     {% endfor %}
   </ul>
-</div>
-{% endif %}
-
-<!-- WhatsApp auto-open modal -->
-{% set wa_mobile = request.query_params.get('wa_open') %}
-{% if wa_mobile %}
-<div class="modal fade show" id="waModal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.5);">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header bg-success text-white">
-        <h5 class="modal-title">📱 פתח וואטסאפ</h5>
-      </div>
-      <div class="modal-body text-center">
-        <p class="mb-3">השובר נשלח בהצלחה</p>
-        <a href="https://wa.me/972{{ wa_mobile[1:] }}?text={{ 'שלום, שלחתי לך שובר מתנה מגלים ונפש' | urlencode }}"
-           target="_blank"
-           class="btn btn-success btn-lg">
-          📱 פתח וואטסאפ
-        </a>
-        <p class="text-muted small mt-3">
-          אחרי פתיחת הצ׳אט, צרף את קובץ ה-PDF ידנית
-        </p>
-      </div>
-      <div class="modal-footer">
-        <a href="/vouchers/{{ voucher.voucher_id }}/view" class="btn btn-secondary">סגור</a>
-      </div>
-    </div>
-  </div>
 </div>
 {% endif %}
 

@@ -17,7 +17,7 @@ from fastapi import Request, Response
 
 # --- Constants ---
 AUTH_FILE = Path("config/auth.json")
-SESSION_MAX_AGE = 24 * 60 * 60  # 24 hours in seconds
+SESSION_MAX_AGE = 15 * 60  # 15 minutes inactivity timeout
 SESSION_COOKIE_NAME = "voucher_session"
 
 
@@ -128,23 +128,26 @@ def create_session(response: Response) -> str:
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,  # Set True in production with HTTPS
+        secure=False,  # Allow HTTP for local dev/tests; HTTPS enforced by nginx
     )
     return session_id
 
 
 def is_authenticated(request: Request) -> bool:
-    """Check if the request has a valid session cookie."""
+    """Check if the request has a valid session cookie.
+    Uses sliding window — resets timeout on every activity."""
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_id:
         return False
-    created_at = _sessions.get(session_id)
-    if created_at is None:
+    last_activity = _sessions.get(session_id)
+    if last_activity is None:
         return False
-    # Check expiry
-    if time.time() - created_at > SESSION_MAX_AGE:
+    # Check inactivity timeout
+    if time.time() - last_activity > SESSION_MAX_AGE:
         _sessions.pop(session_id, None)
         return False
+    # Refresh: reset the timer on activity
+    _sessions[session_id] = time.time()
     return True
 
 

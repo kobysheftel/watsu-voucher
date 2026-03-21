@@ -91,5 +91,24 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+<!-- Inactivity lock — redirect to login after 15 min idle -->
+<script>
+(function() {
+  var TIMEOUT = 15 * 60 * 1000; // 15 minutes
+  var timer;
+  function resetTimer() {
+    clearTimeout(timer);
+    timer = setTimeout(function() {
+      window.location.href = '/auth/logout';
+    }, TIMEOUT);
+  }
+  // Reset on any user activity
+  ['click','touchstart','keydown','mousemove','scroll'].forEach(function(evt) {
+    document.addEventListener(evt, resetTimer, {passive: true});
+  });
+  resetTimer();
+})();
+</script>
+
 </body>
 </html>
