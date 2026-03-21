@@ -1,24 +1,37 @@
 # Watsu Gift Voucher System — MEMORY
 
 ## What This Project Is
-Local Python (FastAPI) app for creating, sending, and tracking Watsu gift vouchers.
-V1 = local-only, manual accounting, no external APIs.
+Web app for creating, sending, and tracking Watsu gift vouchers for "גלים ונפש" (Waves & Soul).
+Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-voucher.
 
 ## Status
-- V1 in active development — Steps 1-7 complete (structure, models, rules, API, QR, PDF, frontend)
-- Latest commit: converted frontend to pure Python form handling (2026-03-17)
-- All 48 tests passing as of last commit
-- Branch: master (main branch exists but master is active)
+- V1 complete and deployed to production
+- 48 tests passing
+- Branch: master, remote: origin (GitHub public repo)
+- Biometric auth (WebAuthn + PIN) implemented
+- PWA installable on smartphones
 
 ## Servers
-- **Local only** — localhost:8000 (FastAPI + uvicorn)
-- No production server yet
+- **Production** — https://vouchers.soulwaves.org (Hetzner server)
+  - SSH: `ssh -i "C:\Users\yacov\.ssh\Hetzner_new" root@iceland.soulwaves.org`
+  - App path: `/var/www/sites/vouchers/`
+  - Service: `systemctl restart vouchers`
+  - Python 3.12, venv at `/var/www/sites/vouchers/venv/`
+  - Nginx reverse proxy → uvicorn on port 8100
+  - SSL via certbot (auto-renew)
+- **Local dev** — localhost:8000 (Python 3.14)
+
+## Deploy Workflow
+1. Edit locally → `git push origin master`
+2. SSH to server → `cd /var/www/sites/vouchers && git pull && systemctl restart vouchers`
+3. For DB schema changes: run ALTER TABLE on server before restart
 
 ## Files and Purpose
 
 ### Root
 | File | Purpose |
 |------|---------|
+| main.py | FastAPI app entry point, auth middleware, router registration |
 | CLAUDE.md | Project instructions for Claude |
 | CHANGELOG.md | Technology change log |
 | MEMORY.md | This file — session state |
@@ -30,52 +43,92 @@ V1 = local-only, manual accounting, no external APIs.
 ### app/ — Application Code
 | File | Purpose |
 |------|---------|
-| __init__.py | FastAPI app factory |
+| __init__.py | Package init |
+| auth.py | PIN hashing, WebAuthn credentials, session management (15-min sliding) |
 | database.py | SQLAlchemy engine, session, Base |
-| models.py | SQLAlchemy models: Holder, Voucher, Sending |
-| schemas.py | Pydantic schemas for validation |
+| models.py | SQLAlchemy models: Holder, Voucher (with display_name), Sending |
+| schemas.py | Pydantic schemas for validation (types: יחיד, זוגי) |
 | rules.py | Business rules engine (cement, send, resend, mark used) |
-| utils.py | Utility functions (Fernet key, voucher ID generation) |
+| utils.py | Utility functions (utcnow) |
 | qr_module.py | QR code generation with Fernet encryption |
-| pdf_module.py | PDF generation via xhtml2pdf |
+| pdf_module.py | PDF generation via reportlab + bidi (Hebrew support, water-blue design) |
 
-### app/routers/ — API Routes
+### app/routers/
 | File | Purpose |
 |------|---------|
-| holders.py | Holder CRUD endpoints |
-| vouchers.py | Voucher CRUD + send/resend/mark-used endpoints |
-| reports.py | Report/listing endpoints |
-| pages.py | HTML page routes (frontend) |
+| auth.py | Auth routes: login, setup, WebAuthn register/verify, logout |
+| holders.py | Holder CRUD API endpoints |
+| vouchers.py | Voucher CRUD + send/resend/mark-used API + PDF/QR serving |
+| reports.py | Report/listing/search/CSV export endpoints |
+| pages.py | HTML page routes: home, orderers, vouchers, new voucher, holder, voucher detail |
 
 ### templates/ — Jinja2 HTML Templates
 | File | Purpose |
 |------|---------|
-| base.html | Base layout (RTL Hebrew) |
-| home.html | Dashboard / home page |
-| holder.html | Holder detail + voucher list |
-| voucher_view.html | Single voucher view |
-| voucher_pdf.html | PDF template for xhtml2pdf |
-| report.html | Reports page |
+| base.html | Base layout (RTL Hebrew, Bootstrap 5, PWA, inactivity lock, logout) |
+| home.html | Search orderer page |
+| holder.html | Orderer detail + voucher list with inline actions |
+| voucher_view.html | Voucher detail: fields, action buttons (WA/email/print), send history |
+| new_voucher.html | New voucher: orderer search/create + voucher form (full page) |
+| all_vouchers.html | Main screen: all vouchers table, sortable/filterable, + שובר חדש |
+| orderers.html | All orderers with voucher counts |
+| voucher_pdf.html | PDF template (reference only — reportlab used instead) |
+| report.html | Filterable report with CSV export |
+| login.html | Biometric + PIN login page |
+| setup.html | First-time PIN setup + biometric registration |
+
+### static/ — PWA Assets
+| File | Purpose |
+|------|---------|
+| manifest.json | PWA manifest (installable app) |
+| sw.js | Service worker (network-first, auto-update) |
+| icon-192.png | PWA icon 192x192 |
+| icon-512.png | PWA icon 512x512 |
+
+### assets/
+| File | Purpose |
+|------|---------|
+| Pool.png | Watsu pool photo for voucher PDF |
+| voucher-bg.png | Background reference image |
+| fonts/Heebo-Variable.ttf | Hebrew font for PDF generation |
 
 ### tests/
 | File | Purpose |
 |------|---------|
 | test_rules.py | Rules engine unit tests (21 tests) |
-| test_api.py | API endpoint tests (27 tests) |
+| test_api.py | API endpoint tests (27 tests, with auth fixture) |
 
-### assets/
+### config/ (git-ignored)
 | File | Purpose |
 |------|---------|
-| Pool.png | Oval center photo for voucher design |
-| voucher-bg.png | Background reference image |
+| secret.key | Fernet encryption key for QR codes |
+| auth.json | PIN hash + WebAuthn credentials |
 
-## What Was Done This Session
-- No changes made this session — /save triggered at session start
+## What Was Done This Session (2026-03-21)
+- V1 completed: all features working end-to-end
+- Fixed PDF Hebrew rendering: switched from xhtml2pdf to reportlab + python-bidi
+- Redesigned voucher PDF: water-blue gradient, pool photo, personalized text
+- Simplified UX: orderer-centric flow (search → create → manage vouchers)
+- Added sortable/filterable tables with Excel-like column filters
+- New voucher page: smart orderer search (phone lookup, pick from list, create new)
+- WhatsApp sharing: navigator.share() on mobile, wa.me fallback on desktop
+- Terminology: מחזיק → מזמין, ליחיד → יחיד, לזוג → זוגי
+- Defaults: expiry 6 months, receipt date today
+- Added display_name field: custom name on voucher (or anonymous if empty)
+- Biometric auth: WebAuthn + PIN, 15-min inactivity lock
+- PWA: installable on smartphone
+- Deployed to https://vouchers.soulwaves.org (Hetzner, nginx, SSL)
+- GitHub repo: kobysheftel/watsu-voucher (public)
+- Added Shift+Enter keybinding for newline in Claude Code
+- Updated global CLAUDE.md: always respond in English
 
 ## Next Steps to Resume
-- Review definitions #5.docx (untracked file) for any new requirements
-- Continue V1 development — frontend testing, end-to-end flow
-- Consider adding main.py entry point if not present in __init__.py
+- Voucher ID = receipt number (נח"ש) — Koby needs to confirm if known at creation time
+- PDF design polish (Koby said "at the end")
+- QR code on voucher (Koby said "last")
+- Logo/wave graphics for PDF header (when assets available)
+- Test biometric auth on phone
+- Consider adding email sending (currently just records, doesn't actually send)
 
 ## Current Stack
 | Discipline | Item | Version |
@@ -84,12 +137,17 @@ V1 = local-only, manual accounting, no external APIs.
 | BACKEND | uvicorn | >=0.32.1 |
 | DATABASE | SQLite | via SQLAlchemy >=2.0.36 |
 | FRONTEND | Jinja2 | >=3.1.4 |
-| FRONTEND | HTML/CSS | RTL Hebrew |
-| LIBS | xhtml2pdf | >=0.2.16 |
+| FRONTEND | Bootstrap 5 RTL | 5.3.2 (CDN) |
+| LIBS | reportlab | >=4.0 |
+| LIBS | python-bidi | >=0.6.0 |
 | LIBS | qrcode | >=8.0 |
 | LIBS | Pillow | >=11.1.0 |
 | LIBS | cryptography | >=43.0.3 |
+| LIBS | webauthn | >=2.0.0 |
 | LIBS | aiofiles | >=24.1.0 |
-| LIBS | python-multipart | >=0.0.12 |
-| LANGUAGE | Python | 3.14.3 (3.12+ compatible) |
-| DEVOPS | Git | local, no remote |
+| LANGUAGE | Python | 3.12 (server), 3.14 (local) |
+| DEVOPS | Git + GitHub | kobysheftel/watsu-voucher |
+| DEVOPS | systemd + nginx | Hetzner Ubuntu |
+| DEVOPS | certbot | SSL auto-renew |
+| AUTH | WebAuthn + PIN | 15-min inactivity timeout |
+| PWA | manifest + SW | network-first caching |
