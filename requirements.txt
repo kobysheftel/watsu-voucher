@@ -32,3 +32,6 @@ cryptography>=43.0.3
 
 # Static file serving
 aiofiles>=24.1.0
+
+# Authentication — WebAuthn/FIDO2 biometric auth
+webauthn>=2.0.0

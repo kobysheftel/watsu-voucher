@@ -40,9 +40,19 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+
+    # Set up auth so middleware lets requests through
+    from app import auth as _auth
+    _auth.save_pin("1234")  # create a PIN so setup is "complete"
+
     with TestClient(app) as c:
+        # Create a valid session via PIN login
+        c.post("/auth/login/pin", data={"pin": "1234"})
         yield c
+
     app.dependency_overrides.clear()
+    # Clean up auth sessions
+    _auth._sessions.clear()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
