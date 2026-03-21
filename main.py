@@ -21,6 +21,7 @@ from app.routers import holders, vouchers, reports, pages
 # --- Ensure required directories exist ---
 Path("vouchers").mkdir(exist_ok=True)
 Path("config").mkdir(exist_ok=True)
+Path("static").mkdir(exist_ok=True)
 
 
 # --- Lifespan: replaces deprecated @app.on_event("startup") ---
@@ -45,6 +46,7 @@ app.include_router(reports.router)
 app.include_router(pages.router)
 
 # --- Static files ---
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 app.mount("/files",  StaticFiles(directory="vouchers"), name="voucher_files")
 
