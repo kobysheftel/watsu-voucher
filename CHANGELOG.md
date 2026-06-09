@@ -7,6 +7,7 @@
 | 2026-03-16 | BACKEND | PDF library | WeasyPrint | xhtml2pdf 0.2.17 | Windows compat, no GTK | pip install WeasyPrint |
 | 2026-03-17 | LANGUAGE | Python | 3.12 (planned) | 3.14.3 (installed) | Only version on machine | install py 3.12 from python.org |
 | 2026-03-17 | LIBS | Pillow | ==11.0.0 | >=11.1.0 (12.1.1) | No 3.14 wheel for 11.0.0 | pin to ==11.0.0 on Python 3.12 |
+| 2026-06-09 | LIBS | All deps | floating `>=` pins | exact pins matching production | Revival: `>=` pulled Starlette 1.2.1, which removed the old `TemplateResponse(name, ctx)` signature → every page 500'd. Pinned to prod set (Starlette 0.52.1 / FastAPI 0.135.1) read from Hetzner; no code changes needed | restore old `requirements.txt` from git history |
 
 ### 2026-03-16 — Step 1: Project Structure
 - Created full project folder structure
