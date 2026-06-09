@@ -196,6 +196,34 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
     )
 
 
+# ── Serve voucher image (PNG) ─────────────────────────────────────────────────
+
+@router.get("/{voucher_id}/image")
+def get_image(voucher_id: str, db: Session = Depends(get_db)):
+    """Serve the voucher PNG image (the default send format)."""
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
+    if not voucher.pdf_path:
+        raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
+
+    # The PNG lives next to the PDF in the same voucher folder.
+    png_path = Path(voucher.pdf_path).parent / "voucher.png"
+
+    # Backward-compat: if an older voucher has a PDF but no PNG yet, render it now.
+    if not png_path.exists():
+        if not Path(voucher.pdf_path).exists():
+            raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
+        from app import pdf_module
+        png_path = pdf_module.generate_image(Path(voucher.pdf_path), png_path.parent)
+
+    return FileResponse(
+        path=str(png_path),
+        media_type="image/png",
+        filename=f"{voucher_id}.png",
+    )
+
+
 # ── Serve QR image ────────────────────────────────────────────────────────────
 
 @router.get("/{voucher_id}/qr")

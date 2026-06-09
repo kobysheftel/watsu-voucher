@@ -10,6 +10,7 @@ pool photo, warm teal text, treatment info, contact, expiry.
 
 from pathlib import Path
 
+import fitz  # PyMuPDF — used to rasterize the voucher PDF into a PNG image
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import mm
@@ -284,4 +285,37 @@ def generate_pdf(voucher, folder: Path) -> Path:
                         bottom_y, size=6, color=_LGREY)
 
     c.save()
+
+    # Also render a PNG image version of the voucher (default send format).
+    generate_image(pdf_path, folder)
+
     return pdf_path
+
+
+# Rasterization zoom factor: 3x ≈ 216 DPI — crisp Hebrew text and a scannable QR,
+# while keeping the PNG light enough (~400 KB) for WhatsApp.
+_IMAGE_ZOOM = 3
+
+
+def generate_image(pdf_path: Path, folder: Path) -> Path:
+    """
+    Render the (already generated) voucher PDF into a PNG image.
+
+    Reuses the exact PDF design — the image is just a high-resolution raster
+    of the same single A5 page. Saved next to the PDF as voucher.png.
+
+    Returns the saved PNG path.
+    """
+    png_path = folder / "voucher.png"
+
+    # Open the PDF and rasterize its first (only) page.
+    doc = fitz.open(str(pdf_path))
+    try:
+        page = doc[0]
+        matrix = fitz.Matrix(_IMAGE_ZOOM, _IMAGE_ZOOM)
+        pix = page.get_pixmap(matrix=matrix, alpha=False)  # no transparency — solid bg
+        pix.save(str(png_path))
+    finally:
+        doc.close()
+
+    return png_path

@@ -160,6 +160,16 @@ hr { margin: 8px 0; }
   </div>
 </div>
 
+<!-- Send format toggle (image is the default) — shown wherever sharing is possible -->
+{% if voucher.status != 'used' %}
+<div class="btn-group btn-group-sm mb-2" role="group" aria-label="פורמט שליחה">
+  <input type="radio" class="btn-check" name="sendFormat" id="fmtImage" value="image" checked>
+  <label class="btn btn-outline-primary" for="fmtImage">🖼️ תמונה</label>
+  <input type="radio" class="btn-check" name="sendFormat" id="fmtPdf" value="pdf">
+  <label class="btn btn-outline-primary" for="fmtPdf">📄 PDF</label>
+</div>
+{% endif %}
+
 <!-- Action buttons -->
 <div class="action-btns">
   {% if voucher.status == 'draft' %}
@@ -171,8 +181,10 @@ hr { margin: 8px 0; }
     <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 ווטסאפ</button>
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 מייל</button>
     {% if voucher.pdf_path %}
+    <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
+       class="btn btn-outline-secondary">🖼️ תמונה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-       class="btn btn-secondary">🖨️ הדפס</a>
+       class="btn btn-secondary">🖨️ PDF/הדפס</a>
     {% endif %}
     <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/use" class="d-contents"
           onsubmit="return confirm('סמן שובר כמומש? פעולה זו בלתי הפיכה');">
@@ -181,8 +193,10 @@ hr { margin: 8px 0; }
 
   {% else %}
     {% if voucher.pdf_path %}
+    <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
+       class="btn btn-outline-secondary">🖼️ תמונה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-       class="btn btn-secondary">🖨️ הדפס</a>
+       class="btn btn-secondary">🖨️ PDF/הדפס</a>
     {% endif %}
     <span class="btn btn-light disabled">✅ מומש</span>
   {% endif %}
@@ -190,10 +204,22 @@ hr { margin: 8px 0; }
 
 <!-- Share logic: native share on mobile, fallback on desktop -->
 <script>
+// Read the selected send format (defaults to image).
+function selectedFormat() {
+  var el = document.querySelector('input[name="sendFormat"]:checked');
+  return (el && el.value === 'pdf') ? 'pdf' : 'image';
+}
+
 async function shareVoucher(via) {
   var voucherId = '{{ voucher.voucher_id }}';
 
-  // First: record the send/resend on server
+  // Chosen format: image (PNG, default) or PDF
+  var fmt = selectedFormat();
+  var endpoint = (fmt === 'pdf') ? '/pdf' : '/image';
+  var ext  = (fmt === 'pdf') ? 'pdf' : 'png';
+  var mime = (fmt === 'pdf') ? 'application/pdf' : 'image/png';
+
+  // First: record the send/resend on server (this also generates PDF + PNG)
   var formData = new FormData();
   formData.append('sent_via', via);
   await fetch('/form/vouchers/' + voucherId + '/send', {method: 'POST', body: formData});
@@ -201,9 +227,9 @@ async function shareVoucher(via) {
   // Try native share (works on mobile)
   if (via === 'WA' && navigator.share) {
     try {
-      var response = await fetch('/vouchers/' + voucherId + '/pdf');
+      var response = await fetch('/vouchers/' + voucherId + endpoint);
       var blob = await response.blob();
-      var file = new File([blob], voucherId + '.pdf', {type: 'application/pdf'});
+      var file = new File([blob], voucherId + '.' + ext, {type: mime});
 
       if (navigator.canShare && navigator.canShare({files: [file]})) {
         await navigator.share({

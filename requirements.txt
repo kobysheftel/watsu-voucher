@@ -23,6 +23,9 @@ python-multipart==0.0.22
 # PDF generation (reportlab directly — xhtml2pdf can't render Hebrew)
 reportlab==4.4.10
 
+# PDF→PNG rasterization (voucher image send format) — pip-only, no system deps
+pymupdf==1.27.2.3
+
 # RTL/bidi text support for Hebrew in PDF
 python-bidi==0.6.7
 
