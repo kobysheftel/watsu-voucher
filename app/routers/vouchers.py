@@ -195,6 +195,9 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
         path=voucher.pdf_path,
         media_type="application/pdf",
         filename=f"{voucher_id}.pdf",
+        # The PDF is regenerated in place when the image/greeting/location
+        # changes (same URL), so disable caching to avoid serving a stale copy.
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -223,6 +226,9 @@ def get_image(voucher_id: str, db: Session = Depends(get_db)):
         path=str(png_path),
         media_type="image/png",
         filename=f"{voucher_id}.png",
+        # The PNG is regenerated in place when the image/greeting/location
+        # changes (same URL), so disable caching to avoid serving a stale copy.
+        headers={"Cache-Control": "no-store"},
     )
 
 

@@ -13,6 +13,7 @@
 | 2026-06-13 | STORAGE | Voucher image | hardcoded `assets/Pool.png` | Image library `assets/voucher_images/` + `library.json` (default + history); per-voucher one-time override or permanent default; upload/revert UI on voucher page; image cemented on first send | Change 4: changeable voucher image with history; new `app/images.py`, `image_file` column, `set_voucher_image` | git revert; drop `image_file` column; delete assets/voucher_images |
 | 2026-06-13 | DATABASE | vouchers table | no greeting/image_file columns | +`greeting`, +`image_file` (TEXT, nullable) via idempotent `_migrate()` in init_db | Support greeting + per-voucher image | `ALTER TABLE vouchers DROP COLUMN greeting; DROP COLUMN image_file` |
 | 2026-06-13 | LIBS | pytest + httpx | not in venv | installed (dev/test only) | Needed to run existing test suite (venv lacked them) | pip uninstall pytest httpx |
+| 2026-06-14 | NETWORK | Voucher file endpoints cache | default (heuristic browser cache) | `Cache-Control: no-store` on `/{id}/image` + `/{id}/pdf` + `?t=` cache-bust on share fetch | Changing a voucher's image regenerates the PDF/PNG in place at the same URL; browsers/WhatsApp served the stale cached copy, so "changed images" appeared not to apply. Verified backend regen is correct via repro | remove the `headers={"Cache-Control": "no-store"}` args + the `?t=` param |
 
 ### 2026-03-16 — Step 1: Project Structure
 - Created full project folder structure

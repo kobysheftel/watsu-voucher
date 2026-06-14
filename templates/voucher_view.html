@@ -322,7 +322,7 @@ async function shareVoucher(via) {
   // Try native share (works on mobile)
   if (via === 'WA' && navigator.share) {
     try {
-      var response = await fetch('/vouchers/' + voucherId + endpoint);
+      var response = await fetch('/vouchers/' + voucherId + endpoint + '?t=' + Date.now());
       var blob = await response.blob();
       var file = new File([blob], voucherId + '.' + ext, {type: mime});
 
