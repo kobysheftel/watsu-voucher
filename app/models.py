@@ -87,6 +87,18 @@ class Voucher(Base):
     # Display name on voucher PDF (optional — if empty, uses holder_name)
     display_name    = Column(Text, nullable=True)
 
+    # Optional greeting / blessing printed on the voucher (editable until used)
+    greeting        = Column(Text, nullable=True)
+
+    # Location / venue printed on the voucher. NULL = use the default at render;
+    # cemented on first send so sent vouchers keep their location.
+    location        = Column(Text, nullable=True)
+
+    # Image shown on the voucher. NULL = use the library default at render time.
+    # Set (cemented) on first send so already-sent vouchers keep their image
+    # even if the library default later changes.
+    image_file      = Column(Text, nullable=True)
+
     # Manual accounting fields (editable until status=used)
     receipt_number  = Column(Text, nullable=True)
     receipt_date    = Column(Date, nullable=True)

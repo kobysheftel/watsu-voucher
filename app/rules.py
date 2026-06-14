@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models import Holder, Voucher, Sending
-from app import qr_module, pdf_module   # implemented in Steps 7 and 6
+from app import qr_module, pdf_module, images, settings   # implemented in Steps 7 and 6
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -113,7 +113,9 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
                    valid_until: date, receipt_number: str | None = None,
                    receipt_date: date | None = None,
                    notes: str | None = None,
-                   display_name: str | None = None) -> Voucher:
+                   display_name: str | None = None,
+                   greeting: str | None = None,
+                   location: str | None = None) -> Voucher:
     """
     Create a new draft voucher for an existing holder.
     Raises RulesError if holder does not exist.
@@ -137,6 +139,8 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
         receipt_date=receipt_date,
         notes=notes,
         display_name=display_name,
+        greeting=greeting,
+        location=location,
     )
     db.add(voucher)
     db.commit()
@@ -205,6 +209,15 @@ def first_send(db: Session, voucher_id: str,
 
     # 3. Prepare file folder
     folder = _voucher_dir(voucher)
+
+    # Freeze the image: if no per-voucher image was chosen, cement the current
+    # library default so later default changes never alter this sent voucher.
+    if not voucher.image_file:
+        voucher.image_file = images.get_default()
+
+    # Freeze the location the same way (cement current default if unset).
+    if not voucher.location:
+        voucher.location = settings.get_default_location()
 
     # 4. Generate QR — saved to qr.png, path stored on voucher
     qr_path = qr_module.generate_qr(voucher, folder)
@@ -310,7 +323,9 @@ def mark_used(db: Session, voucher_id: str) -> Voucher:
 def update_voucher_fields(db: Session, voucher_id: str,
                           receipt_number: str | None = None,
                           receipt_date: date | None = None,
-                          notes: str | None = None) -> Voucher:
+                          notes: str | None = None,
+                          greeting: str | None = None,
+                          location: str | None = None) -> Voucher:
     """
     Update the manually-entered accounting fields on a voucher.
     Allowed at any status except used.
@@ -329,6 +344,85 @@ def update_voucher_fields(db: Session, voucher_id: str,
         voucher.receipt_date = receipt_date
     if notes is not None:
         voucher.notes = notes
+    if greeting is not None:
+        # Empty string clears the greeting; non-empty sets it.
+        voucher.greeting = greeting or None
+    if location is not None:
+        # Empty string clears the per-voucher location (falls back to default).
+        voucher.location = location or None
+
+    db.commit()
+    db.refresh(voucher)
+    return voucher
+
+
+# ── Voucher location (one-time per voucher, or set as future default) ─────────
+
+def set_voucher_location(db: Session, voucher_id: str, location: str,
+                         make_default: bool = False) -> Voucher:
+    """
+    Set the location/venue printed on a voucher.
+
+    - make_default=True also stores it as the default for FUTURE vouchers.
+    - Blocked if the voucher is used. Regenerates PDF+PNG if already sent.
+    """
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        raise RulesError(f"שובר לא נמצא: {voucher_id}")
+    if voucher.is_frozen:
+        raise RulesError(f"שובר {voucher_id} מומש — לא ניתן לשנות מיקום")
+
+    voucher.location = (location or "").strip() or None
+
+    if make_default and voucher.location:
+        settings.set_default_location(voucher.location)
+
+    if voucher.pdf_path:
+        folder = _voucher_dir(voucher)
+        pdf_path = pdf_module.generate_pdf(voucher, folder)
+        voucher.pdf_path = str(pdf_path)
+
+    db.commit()
+    db.refresh(voucher)
+    return voucher
+
+
+# ── Voucher image (one-time per voucher, or set as future default) ────────────
+
+def set_voucher_image(db: Session, voucher_id: str, image_file: str,
+                      make_default: bool = False) -> Voucher:
+    """
+    Set the image used on a voucher.
+
+    - image_file: a filename that already exists in the image library.
+    - make_default=True also sets it as the library default for FUTURE
+      vouchers (this voucher gets it either way).
+
+    Blocked if the voucher is used. If the voucher was already sent (has a
+    PDF), the PDF + PNG are regenerated immediately so the change is visible —
+    WITHOUT logging a new sending event.
+    """
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        raise RulesError(f"שובר לא נמצא: {voucher_id}")
+    if voucher.is_frozen:
+        raise RulesError(f"שובר {voucher_id} מומש — לא ניתן לשנות תמונה")
+
+    # Validate the image exists in the library.
+    known = {img["file"] for img in images.list_images()}
+    if image_file not in known:
+        raise RulesError(f"תמונה לא קיימת בספרייה: {image_file}")
+
+    voucher.image_file = image_file
+
+    if make_default:
+        images.set_default(image_file)
+
+    # Regenerate output only if the voucher has already been rendered (sent).
+    if voucher.pdf_path:
+        folder = _voucher_dir(voucher)
+        pdf_path = pdf_module.generate_pdf(voucher, folder)
+        voucher.pdf_path = str(pdf_path)
 
     db.commit()
     db.refresh(voucher)

@@ -99,6 +99,8 @@ class VoucherUpdate(BaseModel):
     receipt_number: Optional[str] = None
     receipt_date:   Optional[date] = None
     notes:          Optional[str] = None
+    greeting:       Optional[str] = None
+    location:       Optional[str] = None
 
 
 class SendingOut(BaseModel):
@@ -127,6 +129,9 @@ class VoucherOut(BaseModel):
     receipt_number: Optional[str]
     receipt_date: Optional[date]
     notes: Optional[str]
+    greeting: Optional[str] = None
+    location: Optional[str] = None
+    image_file: Optional[str] = None
     qr_path: Optional[str]
     pdf_path: Optional[str]
 

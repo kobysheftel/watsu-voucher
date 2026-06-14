@@ -149,6 +149,24 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
+        <span class="field-label">מיקום</span>
+        <span class="field-value">
+          <input type="text" name="location" class="form-control"
+                 value="{{ default_location }}"
+                 placeholder="מיקום הטיפול"/>
+          <div class="form-text small">ברירת מחדל — ניתן לשנות לשובר זה</div>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">ברכה</span>
+        <span class="field-value">
+          <textarea name="greeting" class="form-control" rows="2"
+                    placeholder="ברכה אישית שתופיע בשובר (אופציונלי)"></textarea>
+        </span>
+      </div>
+
+      <div class="field-row">
         <span class="field-label">תוקף עד *</span>
         <span class="field-value">
           <input type="date" name="valid_until" class="form-control"

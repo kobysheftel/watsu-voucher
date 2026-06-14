@@ -20,6 +20,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from bidi.algorithm import get_display
 
+from app import images    # voucher image library (default + per-voucher override)
+from app import settings  # default voucher location/venue
+
 # A5 dimensions
 _W, _H = A5   # 148mm x 210mm (≈ 419 x 595 pts)
 
@@ -80,6 +83,57 @@ def _draw_centered(c: canvas.Canvas, text: str, y: float,
     text_width = c.stringWidth(display_text, font, size)
     x = (_W - text_width) / 2
     c.drawString(x, y, display_text)
+
+
+def _draw_centered_fit(c: canvas.Canvas, text: str, y: float,
+                       max_size: float, color=None,
+                       min_size: float = 7, max_width: float = None):
+    """
+    Like _draw_centered, but shrinks the font size until the (bidi-processed)
+    text fits within max_width. Used for long header / message lines so they
+    never overflow the A5 page.
+    """
+    if max_width is None:
+        max_width = _W - 2 * (8 * mm)   # page width minus side margins
+    disp = _bidi(text)
+    size = max_size
+    while size > min_size and c.stringWidth(disp, "Heebo", size) > max_width:
+        size -= 0.5
+    _draw_centered(c, text, y, size=size, color=color)
+
+
+def _draw_wrapped(c: canvas.Canvas, text: str, y: float,
+                  size: float, color=None, line_h: float = None,
+                  max_width: float = None) -> float:
+    """
+    Draw word-wrapped, centered text. Returns the new y position below the
+    last line. Used for the optional free-text greeting.
+    """
+    if color is None:
+        color = _WARM
+    if max_width is None:
+        max_width = _W - 2 * (12 * mm)
+    if line_h is None:
+        line_h = (size + 3)
+
+    words = str(text).split()
+    lines = []
+    current = ""
+    for w in words:
+        trial = (current + " " + w).strip()
+        # Measure the bidi-processed trial line.
+        if c.stringWidth(_bidi(trial), "Heebo", size) <= max_width or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = w
+    if current:
+        lines.append(current)
+
+    for line in lines:
+        _draw_centered(c, line, y, size=size, color=color)
+        y -= line_h
+    return y
 
 
 def _draw_gradient_bg(c: canvas.Canvas):
@@ -177,12 +231,13 @@ def generate_pdf(voucher, folder: Path) -> Path:
     # ── Starting Y position (from top) ──
     y = _H - 20 * mm
 
-    # ── Business name: "גלים ונפש" ──
-    _draw_centered(c, "גלים ונפש", y, size=30, color=_TEAL)
-    y -= 9 * mm
+    # ── Business name (fit to width — long line) ──
+    _draw_centered_fit(c, "גלים ונפש - אביגל מאור", y, max_size=22, color=_TEAL)
+    y -= 8 * mm
 
-    # ── Subtitle ──
-    _draw_centered(c, "טיפולי וואטסו", y, size=14, color=_TEAL_DARK)
+    # ── Subtitle (fit to width — four terms) ──
+    _draw_centered_fit(c, "וואטסו - פסיכותרפיה - הידרותרפיה - מים פתוחים",
+                       y, max_size=11, color=_TEAL_DARK)
     y -= 5 * mm
 
     # ── Wave decoration ──
@@ -193,7 +248,11 @@ def generate_pdf(voucher, folder: Path) -> Path:
     pool_w = 70 * mm
     pool_h = 52 * mm
 
-    if _POOL_IMAGE.exists():
+    # Per-voucher image override (cemented on first send) or library default.
+    pool_path = images.image_path(getattr(voucher, "image_file", None)
+                                  or images.get_default())
+
+    if pool_path.exists():
         pool_x = (_W - pool_w) / 2
         pool_y = y - pool_h
         try:
@@ -204,7 +263,7 @@ def generate_pdf(voucher, folder: Path) -> Path:
             c.roundRect(pool_x - 2, pool_y - 2, pool_w + 4, pool_h + 4,
                         8 * mm, stroke=1, fill=1)
 
-            img = ImageReader(str(_POOL_IMAGE))
+            img = ImageReader(str(pool_path))
             # Clip to rounded rect
             c.saveState()
             clip_path = c.beginPath()
@@ -218,24 +277,26 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     y -= pool_h + 6 * mm
 
-    # ── Title — personalized if display_name set, anonymous otherwise ──
-    name = getattr(voucher, 'display_name', None) or ""
-    name = name.strip()
+    # ── Message — "קבלת/קבלתם שובר לטיפול {type}" ──
+    # Plural form for couple vouchers (זוגי), singular otherwise.
+    plural = (voucher.voucher_type == "זוגי")
+    verb = "קבלתם" if plural else "קבלת"
+    message = f"{verb} שובר לטיפול {voucher.voucher_type}"
+    _draw_centered_fit(c, message, y, max_size=17, color=_TEAL)
+    y -= 7 * mm
 
-    if name:
-        # Personalized: "איזה כיף" + "{name} מזמין אותך לטיפול [זוגי]"
-        _draw_centered(c, "איזה כיף", y, size=17, color=_TEAL)
-        y -= 7 * mm
-        if voucher.voucher_type == "זוגי":
-            _draw_centered(c, f"{name} מזמין אותך לטיפול זוגי", y, size=14, color=_TEAL_DARK)
-        else:
-            _draw_centered(c, f"{name} מזמין אותך לטיפול", y, size=14, color=_TEAL_DARK)
-    else:
-        # Anonymous: "איזה כיף קיבלת שובר מתנה" + "טיפול וואטסו {type}"
-        _draw_centered(c, "איזה כיף קיבלת שובר מתנה", y, size=17, color=_TEAL)
-        y -= 7 * mm
-        _draw_centered(c, f"טיפול וואטסו {voucher.voucher_type}", y, size=14, color=_TEAL_DARK)
-    y -= 6 * mm
+    # ── Location / venue line (just before the greeting) ──
+    location = (getattr(voucher, 'location', None)
+                or settings.get_default_location() or "").strip()
+    if location:
+        _draw_centered_fit(c, f"מיקום: {location}", y, max_size=11, color=_GREY)
+        y -= 5 * mm
+
+    # ── Optional greeting / blessing (word-wrapped) ──
+    greeting = (getattr(voucher, 'greeting', None) or "").strip()
+    if greeting:
+        y = _draw_wrapped(c, greeting, y, size=11, color=_TEAL_DARK, line_h=5 * mm)
+        y -= 1 * mm
 
     # ── Ornamental divider ──
     _draw_ornament(c, y)

@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from typing import Optional
 from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
@@ -30,6 +30,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Holder, Voucher
 from app import rules
+from app import images
+from app import settings
 from app import auth as auth_module
 
 router    = APIRouter(tags=["pages"])
@@ -130,6 +132,7 @@ def new_voucher_page(request: Request, db: Session = Depends(get_db)):
         "all_holders":    all_holders,
         "today":          date.today().isoformat(),
         "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
+        "default_location": settings.get_default_location(),
     })
 
 
@@ -164,11 +167,21 @@ def voucher_page(voucher_id: str, request: Request, db: Session = Depends(get_db
 
     holder = db.get(Holder, voucher.mobile) if voucher.mobile else None
 
+    # Image library for the image-management card (gallery + current selection).
+    gallery = images.list_images()
+    current_image = voucher.image_file or images.get_default()
+
+    # Location: current value (per-voucher override or default).
+    current_location = voucher.location or settings.get_default_location()
+
     return templates.TemplateResponse("voucher_view.html", {
-        "request":        request,
-        "voucher":        voucher,
-        "holder":         holder,
-        "today":          date.today().isoformat(),
+        "request":          request,
+        "voucher":          voucher,
+        "holder":           holder,
+        "today":            date.today().isoformat(),
+        "gallery":          gallery,
+        "current_image":    current_image,
+        "current_location": current_location,
     })
 
 
@@ -298,6 +311,8 @@ async def form_create_voucher_full(
     receipt_date:   Optional[str] = Form(None),
     notes:          Optional[str] = Form(None),
     display_name:   Optional[str] = Form(None),
+    greeting:       Optional[str] = Form(None),
+    location:       Optional[str] = Form(None),
     is_new_orderer: str           = Form("0"),
     new_name:       Optional[str] = Form(None),
     new_email:      Optional[str] = Form(None),
@@ -324,6 +339,8 @@ async def form_create_voucher_full(
             receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
             notes          = notes or None,
             display_name   = display_name or None,
+            greeting       = greeting or None,
+            location       = location or None,
         )
         return _flash(f"/vouchers/{v.voucher_id}/view", "השובר נוצר בהצלחה")
     except rules.RulesError as e:
@@ -397,9 +414,10 @@ async def form_update_notes(
     receipt_number: Optional[str] = Form(None),
     receipt_date:   Optional[str] = Form(None),
     notes:          Optional[str] = Form(None),
+    greeting:       Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Update receipt number, receipt date, and notes; redirect back."""
+    """Update receipt number, receipt date, notes, and greeting; redirect back."""
     try:
         rules.update_voucher_fields(
             db,
@@ -407,9 +425,69 @@ async def form_update_notes(
             receipt_number = receipt_number or None,
             receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
             notes          = notes or None,
+            greeting       = greeting if greeting is not None else None,
         )
         return _flash(f"/vouchers/{voucher_id}/view", "נשמר בהצלחה")
     except rules.RulesError as e:
         return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
     except ValueError as e:
         return _flash(f"/vouchers/{voucher_id}/view", f"תאריך לא תקין: {e}", "danger")
+
+
+# ── POST: Set voucher image (one-time, or as future default) ──────────────────
+
+@router.post("/form/vouchers/{voucher_id}/image")
+async def form_set_image(
+    voucher_id: str,
+    image_file: str = Form(...),
+    mode:       str = Form("once"),   # "once" = this voucher only, "permanent" = also default
+    db: Session = Depends(get_db),
+):
+    """Set the voucher's image; 'permanent' also makes it the future default."""
+    try:
+        rules.set_voucher_image(
+            db, voucher_id, image_file,
+            make_default=(mode == "permanent"),
+        )
+        msg = "התמונה נשמרה כברירת מחדל" if mode == "permanent" else "התמונה עודכנה"
+        return _flash(f"/vouchers/{voucher_id}/view", msg)
+    except rules.RulesError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
+
+
+# ── POST: Upload a new image into the library ─────────────────────────────────
+
+@router.post("/form/vouchers/{voucher_id}/image/upload")
+async def form_upload_image(
+    voucher_id: str,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Add an uploaded image to the library, then return to the voucher page."""
+    try:
+        data = await image.read()
+        images.add_image(data, image.filename or "image.png")
+        return _flash(f"/vouchers/{voucher_id}/view", "התמונה נוספה לספרייה")
+    except ValueError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
+
+
+# ── POST: Set voucher location (one-time, or as future default) ───────────────
+
+@router.post("/form/vouchers/{voucher_id}/location")
+async def form_set_location(
+    voucher_id: str,
+    location:   str = Form(""),
+    mode:       str = Form("once"),   # "once" = this voucher only, "permanent" = also default
+    db: Session = Depends(get_db),
+):
+    """Set the voucher's location; 'permanent' also makes it the future default."""
+    try:
+        rules.set_voucher_location(
+            db, voucher_id, location,
+            make_default=(mode == "permanent"),
+        )
+        msg = "המיקום נשמר כברירת מחדל" if mode == "permanent" else "המיקום עודכן"
+        return _flash(f"/vouchers/{voucher_id}/view", msg)
+    except rules.RulesError as e:
+        return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")

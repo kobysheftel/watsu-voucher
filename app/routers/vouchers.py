@@ -122,6 +122,8 @@ def update_voucher(voucher_id: str, body: VoucherUpdate,
             receipt_number=body.receipt_number,
             receipt_date=body.receipt_date,
             notes=body.notes,
+            greeting=body.greeting,
+            location=body.location,
         )
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

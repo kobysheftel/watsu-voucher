@@ -36,6 +36,16 @@
 h6 { font-size: .85rem; margin-bottom: 6px; }
 hr { margin: 8px 0; }
 
+/* Voucher-image picker thumbnails */
+.img-pick { cursor: pointer; display: inline-block; }
+.img-pick input { position: absolute; opacity: 0; }
+.img-pick img {
+  width: 84px; height: 62px; object-fit: cover;
+  border: 3px solid transparent; border-radius: 8px;
+}
+.img-pick input:checked + img { border-color: #198754; }
+.img-pick:hover img { border-color: #adb5bd; }
+
 @media (max-width: 576px) {
   .field-label { min-width: 65px; width: 65px; font-size: .75rem; }
   .action-btns .btn { flex: none; width: 100%; }
@@ -127,6 +137,16 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
+        <span class="field-label">ברכה</span>
+        <span class="field-value">
+          <textarea name="greeting" class="form-control form-control-sm" rows="2"
+                    placeholder="ברכה אישית שתופיע בשובר (אופציונלי)"
+                    {% if voucher.is_frozen %}readonly{% endif %}
+                    onchange="this.form.submit()">{{ voucher.greeting or '' }}</textarea>
+        </span>
+      </div>
+
+      <div class="field-row">
         <span class="field-label">הערות</span>
         <span class="field-value">
           <textarea name="notes" class="form-control form-control-sm" rows="2"
@@ -159,6 +179,81 @@ hr { margin: 8px 0; }
 
   </div>
 </div>
+
+<!-- Location management (hidden once the voucher is used/frozen) -->
+{% if voucher.status != 'used' %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header small fw-bold">מיקום הטיפול</div>
+  <div class="card-body">
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/location">
+      <div class="field-row">
+        <span class="field-label">מיקום</span>
+        <span class="field-value">
+          <input type="text" name="location" class="form-control form-control-sm"
+                 value="{{ current_location }}" placeholder="מיקום הטיפול"/>
+        </span>
+      </div>
+      <div class="mb-2">
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="mode" id="locOnce" value="once" checked>
+          <label class="form-check-label small" for="locOnce">חד פעמי (לשובר זה)</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="mode" id="locPerm" value="permanent">
+          <label class="form-check-label small" for="locPerm">קבוע (ברירת מחדל לשוברים חדשים)</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-success btn-sm">שמור מיקום</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Image management (hidden once the voucher is used/frozen) -->
+{% if voucher.status != 'used' %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header small fw-bold">תמונת השובר</div>
+  <div class="card-body">
+
+    <!-- Pick / revert form -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/image">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        {% for img in gallery %}
+        <label class="img-pick" title="{{ img.label }}">
+          <input type="radio" name="image_file" value="{{ img.file }}"
+                 {% if img.file == current_image %}checked{% endif %}/>
+          <img src="/assets/voucher_images/{{ img.file }}" alt="{{ img.label }}"/>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="mb-2">
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="mode" id="modeOnce" value="once" checked>
+          <label class="form-check-label small" for="modeOnce">חד פעמי (לשובר זה)</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="mode" id="modePerm" value="permanent">
+          <label class="form-check-label small" for="modePerm">קבוע (ברירת מחדל לשוברים חדשים)</label>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-success btn-sm">שמור תמונה</button>
+    </form>
+
+    <hr class="my-3"/>
+
+    <!-- Upload a new image into the library -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/image/upload"
+          enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+      <input type="file" name="image" accept="image/png,image/jpeg,image/webp"
+             class="form-control form-control-sm" required/>
+      <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">טען תמונה חדשה</button>
+    </form>
+
+  </div>
+</div>
+{% endif %}
 
 <!-- Send format toggle (image is the default) — shown wherever sharing is possible -->
 {% if voucher.status != 'used' %}

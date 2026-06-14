@@ -5,8 +5,8 @@ REM  Scheduled task: daily at 23:00
 REM  Target: OneDrive\Technical\Claude_Projects\Voucher\backup\
 REM ============================================================
 
-SET SRC=C:\Users\yacov\OneDrive\Technical\Claude_Projects\Voucher
-SET DST=C:\Users\yacov\OneDrive\Technical\Claude_Projects\Voucher\backup
+SET SRC=T:\Voucher
+SET DST=T:\Voucher\backup
 
 echo [%date% %time%] Starting backup...
 
