@@ -34,6 +34,21 @@ def _write(data: dict) -> None:
     )
 
 
+# Address that receives a "new voucher produced" e-mail on every first send.
+# Empty string disables the notification.
+_DEFAULT_NOTIFY_EMAIL = "kobysheftel@gmail.com"
+
+
+def get_notify_email() -> str:
+    """Return the notification recipient for new vouchers ('' = disabled)."""
+    data = _read()
+    if "notify_email" not in data:
+        # Bootstrap the key so it is visible/editable in config/settings.json
+        data["notify_email"] = _DEFAULT_NOTIFY_EMAIL
+        _write(data)
+    return (data.get("notify_email") or "").strip()
+
+
 def get_default_location() -> str:
     """Return the current default location for new vouchers."""
     return _read().get("default_location") or _DEFAULT_LOCATION

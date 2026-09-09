@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models import Holder, Voucher, Sending
-from app import qr_module, pdf_module, images, settings   # implemented in Steps 7 and 6
+from app import qr_module, pdf_module, images, settings, mailer
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -242,6 +242,13 @@ def first_send(db: Session, voucher_id: str,
 
     db.commit()
     db.refresh(voucher)
+
+    # 8. Notify by e-mail that a new voucher was produced (background, never raises)
+    try:
+        mailer.notify_new_voucher(voucher, sent_via, performed_by)
+    except Exception:
+        pass   # e-mail must never break a send
+
     return voucher
 
 
