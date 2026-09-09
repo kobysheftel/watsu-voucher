@@ -2,8 +2,8 @@
 Mailer — e-mail notification when a new voucher is produced (first send).
 
 Sends "new voucher" e-mails via Gmail SMTP from whereiskoby@gmail.com to the
-address in config/settings.json ("notify_email"). Attachments: the voucher
-JPEG + PDF that were just generated.
+address in config/settings.json ("notify_email"). Attachment: the voucher
+PDF that was just generated.
 
 Password lookup order (first hit wins):
   1. env var VOUCHER_SMTP_PASS
@@ -166,11 +166,10 @@ def notify_new_voucher(voucher, sent_via: str, performed_by: str | None = None) 
     # Snapshot everything now — the ORM object must not be touched from the thread.
     subject = f"שובר חדש הופק: {voucher.voucher_id} ({voucher.voucher_type}) — {voucher.holder_name or ''}"
     body = _voucher_summary(voucher, sent_via, performed_by)
+    # Attach the PDF only (Koby: the JPEG is not needed in the e-mail)
     attachments: list[Path] = []
     if voucher.pdf_path:
-        pdf = Path(voucher.pdf_path)
-        attachments.append(pdf.parent / "voucher.jpg")
-        attachments.append(pdf)
+        attachments.append(Path(voucher.pdf_path))
 
     def _worker():
         try:
