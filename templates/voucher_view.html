@@ -271,6 +271,11 @@ hr { margin: 8px 0; }
     <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 שלח בווטסאפ</button>
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 שלח במייל</button>
     <button type="button" class="btn btn-secondary" onclick="shareVoucher('PRINT')">🖨️ הדפס</button>
+    <!-- Preview of the draft — rendered on the fly, no QR, nothing saved or sent -->
+    <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
+       class="btn btn-outline-secondary">👁️ תצוגה מקדימה</a>
+    <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
+       class="btn btn-outline-secondary">👁️ PDF</a>
 
   {% elif voucher.status == 'sent' %}
     <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 ווטסאפ</button>

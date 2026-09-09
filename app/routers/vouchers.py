@@ -18,7 +18,7 @@ from typing import Optional
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
@@ -183,14 +183,34 @@ def use_voucher(voucher_id: str, db: Session = Depends(get_db)):
 
 # ── Serve PDF ─────────────────────────────────────────────────────────────────
 
+def _needs_preview(voucher: Voucher) -> bool:
+    """
+    True when the voucher has no rendered files to serve: it is still a
+    draft (never sent), or its PDF is missing on disk. In both cases the
+    voucher is rendered on the fly instead (no state change, nothing saved).
+    """
+    return not voucher.pdf_path or not Path(voucher.pdf_path).exists()
+
+
 @router.get("/{voucher_id}/pdf")
 def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
-    """Serve the voucher PDF file."""
+    """Serve the voucher PDF file (rendered on the fly for drafts)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
-    if not voucher.pdf_path or not Path(voucher.pdf_path).exists():
-        raise HTTPException(status_code=404, detail="קובץ PDF לא נמצא — יש לשלוח תחילה")
+
+    if _needs_preview(voucher):
+        from app import pdf_module
+        pdf_bytes, _ = pdf_module.render_preview(voucher)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{voucher_id}.pdf"',
+                "Cache-Control": "no-store",   # draft content changes as fields are edited
+            },
+        )
+
     return FileResponse(
         path=voucher.pdf_path,
         media_type="application/pdf",
@@ -205,14 +225,23 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{voucher_id}/image")
 def get_image(voucher_id: str, db: Session = Depends(get_db)):
-    """Serve the voucher JPEG image (the default send format)."""
+    """Serve the voucher JPEG image (the default send format; on the fly for drafts)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
-    if not voucher.pdf_path:
-        raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
 
     from app import pdf_module
+
+    if _needs_preview(voucher):
+        _, jpg_bytes = pdf_module.render_preview(voucher)
+        return Response(
+            content=jpg_bytes,
+            media_type="image/jpeg",
+            headers={
+                "Content-Disposition": f'inline; filename="{voucher_id}.jpg"',
+                "Cache-Control": "no-store",   # draft content changes as fields are edited
+            },
+        )
 
     # The image lives next to the PDF in the same voucher folder.
     img_path = Path(voucher.pdf_path).parent / pdf_module.IMAGE_FILENAME
@@ -220,8 +249,6 @@ def get_image(voucher_id: str, db: Session = Depends(get_db)):
     # Backward-compat: an older voucher may have a PDF but no image yet
     # (or only the old voucher.png) — render the JPEG from the PDF now.
     if not img_path.exists():
-        if not Path(voucher.pdf_path).exists():
-            raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
         img_path = pdf_module.generate_image(Path(voucher.pdf_path), img_path.parent)
 
     return FileResponse(

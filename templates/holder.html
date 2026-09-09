@@ -102,6 +102,9 @@
           <!-- First send options -->
           <button class="btn btn-outline-success btn-sm send-btn" title="שלח"
                   data-voucher="{{ v.voucher_id }}" data-action="send">📤</button>
+          <!-- Preview of the draft (rendered on the fly, nothing saved) -->
+          <a href="/vouchers/{{ v.voucher_id }}/image" target="_blank"
+             class="btn btn-outline-secondary btn-sm" title="תצוגה מקדימה">👁️</a>
 
           {% elif v.status == 'sent' %}
           <!-- Download/print PDF -->

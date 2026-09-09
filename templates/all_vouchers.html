@@ -70,9 +70,9 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
         <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
         <td class="text-nowrap">
           <a href="/vouchers/{{ v.voucher_id }}/view" class="btn btn-outline-primary btn-sm">📄</a>
-          {% if v.pdf_path %}
-          <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank" class="btn btn-outline-secondary btn-sm">🖨️</a>
-          {% endif %}
+          <!-- PDF: saved file for sent/used vouchers, on-the-fly preview for drafts -->
+          <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank" class="btn btn-outline-secondary btn-sm"
+             title="{% if v.status == 'draft' %}תצוגה מקדימה{% else %}PDF{% endif %}">🖨️</a>
           {% if v.status == 'sent' %}
           <form method="post" action="/form/vouchers/{{ v.voucher_id }}/send" style="display:inline;">
             <input type="hidden" name="sent_via" value="WA"/>

@@ -325,3 +325,29 @@ def test_login_avigal(client):
     r = client.post("/auth/login/pin", data={"pin": "40689"}, follow_redirects=False)
     assert r.status_code == 303
     assert "/all-vouchers" in r.headers["location"]
+
+
+# ── Draft preview (render on the fly, no state change) ───────────────────────
+
+def test_draft_preview_image_and_pdf(client):
+    """A draft voucher can be viewed before it is sent; nothing is persisted."""
+    make_holder(client)
+    v = make_voucher(client)
+    vid = v["voucher_id"]
+
+    r = client.get(f"/vouchers/{vid}/image")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/jpeg")
+    assert r.content[:2] == b"\xff\xd8"          # JPEG magic bytes
+
+    r = client.get(f"/vouchers/{vid}/pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/pdf")
+    assert r.content[:4] == b"%PDF"
+
+    # Still a draft — no send, no files recorded, no QR
+    data = client.get(f"/vouchers/{vid}").json()
+    assert data["status"] == "draft"
+    assert data["pdf_path"] is None
+    assert data["qr_path"] is None
+    assert data["sendings"] == []

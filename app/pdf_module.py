@@ -13,6 +13,7 @@ Design (2026-09, Koby's Word template):
   - QR code centered at the bottom, voucher ID (no caption) under it
 """
 
+import tempfile
 from pathlib import Path
 
 import fitz  # PyMuPDF — used to rasterize the voucher PDF into a PNG image
@@ -309,6 +310,22 @@ def generate_pdf(voucher, folder: Path) -> Path:
     generate_image(pdf_path, folder)
 
     return pdf_path
+
+
+def render_preview(voucher) -> tuple[bytes, bytes]:
+    """
+    Render the voucher on the fly WITHOUT touching its files or state.
+
+    Used to show a draft voucher (not yet sent) exactly as it will look —
+    minus the QR, which is only generated on first send. Also used as a
+    fallback when a sent voucher's files are missing on disk.
+
+    Returns (pdf_bytes, jpeg_bytes). Nothing is persisted.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        pdf_path = generate_pdf(voucher, folder)   # also writes the JPEG
+        return pdf_path.read_bytes(), (folder / IMAGE_FILENAME).read_bytes()
 
 
 # Rasterization zoom factor: 3x ≈ 216 DPI — crisp Hebrew text and a scannable QR.
