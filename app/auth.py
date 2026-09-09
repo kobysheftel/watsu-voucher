@@ -24,7 +24,7 @@ SESSION_COOKIE_NAME = "voucher_session"
 # Pre-configured users (PINs only used for initial seeding)
 _SEED_USERS = {
     "Koby": "122156",
-    "Avigal": "40689",
+    "Avigal": "3004",
 }
 
 

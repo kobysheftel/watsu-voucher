@@ -322,7 +322,7 @@ def test_login_koby(client):
 
 def test_login_avigal(client):
     """Avigal can log in with her PIN."""
-    r = client.post("/auth/login/pin", data={"pin": "40689"}, follow_redirects=False)
+    r = client.post("/auth/login/pin", data={"pin": "3004"}, follow_redirects=False)
     assert r.status_code == 303
     assert "/all-vouchers" in r.headers["location"]
 
