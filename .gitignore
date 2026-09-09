@@ -1,10 +1,13 @@
 # === SENSITIVE — NEVER COMMIT ===
-config/             # contains secret.key (Fernet encryption key)
+# contains secret.key (Fernet encryption key)
+config/
 config/secret.key
 
 # === GENERATED FILES ===
-vouchers/           # generated PDFs, QR images, metadata
-backup/             # robocopy backup target
+# generated PDFs, QR images, metadata
+vouchers/
+# robocopy backup target
+backup/
 __pycache__/
 *.pyc
 *.pyo
