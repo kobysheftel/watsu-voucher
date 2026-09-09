@@ -205,28 +205,30 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{voucher_id}/image")
 def get_image(voucher_id: str, db: Session = Depends(get_db)):
-    """Serve the voucher PNG image (the default send format)."""
+    """Serve the voucher JPEG image (the default send format)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
     if not voucher.pdf_path:
         raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
 
-    # The PNG lives next to the PDF in the same voucher folder.
-    png_path = Path(voucher.pdf_path).parent / "voucher.png"
+    from app import pdf_module
 
-    # Backward-compat: if an older voucher has a PDF but no PNG yet, render it now.
-    if not png_path.exists():
+    # The image lives next to the PDF in the same voucher folder.
+    img_path = Path(voucher.pdf_path).parent / pdf_module.IMAGE_FILENAME
+
+    # Backward-compat: an older voucher may have a PDF but no image yet
+    # (or only the old voucher.png) — render the JPEG from the PDF now.
+    if not img_path.exists():
         if not Path(voucher.pdf_path).exists():
             raise HTTPException(status_code=404, detail="תמונה לא נמצאה — יש לשלוח תחילה")
-        from app import pdf_module
-        png_path = pdf_module.generate_image(Path(voucher.pdf_path), png_path.parent)
+        img_path = pdf_module.generate_image(Path(voucher.pdf_path), img_path.parent)
 
     return FileResponse(
-        path=str(png_path),
-        media_type="image/png",
-        filename=f"{voucher_id}.png",
-        # The PNG is regenerated in place when the image/greeting/location
+        path=str(img_path),
+        media_type="image/jpeg",
+        filename=f"{voucher_id}.jpg",
+        # The image is regenerated in place when the photo/greeting/location
         # changes (same URL), so disable caching to avoid serving a stale copy.
         headers={"Cache-Control": "no-store"},
     )

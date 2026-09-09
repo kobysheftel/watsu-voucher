@@ -308,11 +308,11 @@ function selectedFormat() {
 async function shareVoucher(via) {
   var voucherId = '{{ voucher.voucher_id }}';
 
-  // Chosen format: image (PNG, default) or PDF
+  // Chosen format: image (JPEG, default) or PDF
   var fmt = selectedFormat();
   var endpoint = (fmt === 'pdf') ? '/pdf' : '/image';
-  var ext  = (fmt === 'pdf') ? 'pdf' : 'png';
-  var mime = (fmt === 'pdf') ? 'application/pdf' : 'image/png';
+  var ext  = (fmt === 'pdf') ? 'pdf' : 'jpg';
+  var mime = (fmt === 'pdf') ? 'application/pdf' : 'image/jpeg';
 
   // First: record the send/resend on server (this also generates PDF + PNG)
   var formData = new FormData();

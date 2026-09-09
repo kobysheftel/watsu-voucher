@@ -1,10 +1,15 @@
 {
-  "default": "Pool.png",
+  "default": "Pool-oval.png",
   "images": [
     {
       "file": "Pool.png",
       "label": "ברירת מחדל",
       "added_at": "2026-06-13T16:18:56.026534"
+    },
+    {
+      "file": "Pool-oval.png",
+      "label": "בריכה — אליפסה (עיצוב 2026-09)",
+      "added_at": "2026-09-09T18:27:26.057031"
     }
   ]
 }
