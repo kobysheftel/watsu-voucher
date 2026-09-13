@@ -8,19 +8,19 @@
   <div class="col">
     <div class="stat-card shadow-sm">
       <div class="stat-num text-dark">{{ stats.total }}</div>
-      <div class="stat-lbl">סה״כ שוברים</div>
+      <div class="stat-lbl">סה״כ כרטיסים</div>
     </div>
   </div>
   <div class="col">
     <div class="stat-card shadow-sm">
       <div class="stat-num text-secondary">{{ stats.draft }}</div>
-      <div class="stat-lbl">טיוטות</div>
+      <div class="stat-lbl">בתהליך</div>
     </div>
   </div>
   <div class="col">
     <div class="stat-card shadow-sm">
       <div class="stat-num text-primary">{{ stats.sent }}</div>
-      <div class="stat-lbl">נשלחו</div>
+      <div class="stat-lbl">פעילים</div>
     </div>
   </div>
   <div class="col">
@@ -40,7 +40,7 @@
 <!-- Navigation buttons -->
 <div class="d-flex gap-2 mb-4">
   <a href="/orderers/view" class="btn btn-outline-info">📋 כל המזמינים</a>
-  <a href="/all-vouchers/view" class="btn btn-outline-secondary">📄 כל השוברים</a>
+  <a href="/all-vouchers/view" class="btn btn-outline-secondary">📄 כל הכרטיסים</a>
 </div>
 
 <!-- Main search: find orderer -->
@@ -74,7 +74,7 @@
             <div class="text-muted">{{ h.mobile }}</div>
             {% if h.email %}<div class="text-muted small">{{ h.email }}</div>{% endif %}
             <div class="mt-2">
-              <span class="badge bg-secondary">{{ h.vouchers | length }} שוברים</span>
+              <span class="badge bg-secondary">{{ h.vouchers | length }} כרטיסים</span>
             </div>
           </div>
         </div>

@@ -1,12 +1,13 @@
 # Watsu Gift Voucher System — MEMORY
 
 ## What This Project Is
-Web app for creating, sending, and tracking Watsu gift vouchers for "גלים ונפש" (Waves & Soul).
+Web app for creating, selling, sending and tracking Watsu tickets — gift vouchers (שובר) and multi-session passes (כרטיסיה) — for "גלים ונפש" (Waves & Soul).
 Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-voucher.
 
 ## Status
 - V1 complete and deployed to production; phase 2 started 2026-09-09 (new voucher design)
-- 53 tests passing (`venv\Scripts\python -m pytest -q`)
+- **V2 phase A (tickets + entries + manual payment) implemented locally 2026-09-13 — NOT yet deployed.** Design: `docs/DESIGN-V2-TICKETS.md`
+- 82 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 29 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py)
 - PWA installable on smartphones
@@ -47,23 +48,24 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | __init__.py | Package init |
 | auth.py | PIN hashing, WebAuthn credentials, session management (15-min sliding) |
 | database.py | SQLAlchemy engine, session, Base |
-| models.py | SQLAlchemy models: Holder, Voucher (with display_name), Sending |
-| schemas.py | Pydantic schemas for validation (types: יחיד, זוגי) |
-| rules.py | Business rules engine (cement, send, resend, mark used) |
+| models.py | SQLAlchemy models: Holder, Voucher (= ticket: kind VOUCHER/PASS, entries_total, pricing + payment fields), Entry (held/consumed/cancelled), Sending (kind TICKET/PAYMENT_LINK). Status/kind constants + Hebrew labels live here |
+| schemas.py | Pydantic schemas (VoucherCreate with kind/entries/prices, EntryOut, MarkPaidRequest, HoldRequest, PriceUpdate) |
+| rules.py | Business rules engine: create, request_payment, mark_paid, first_send (send ticket), resend, hold_entry / consume_entry / cancel_hold / consume_direct, mark_used (legacy = consume one), set_price, holder lock (any consumed entry) |
 | utils.py | Utility functions (utcnow) |
 | qr_module.py | QR code generation with Fernet encryption |
 | pdf_module.py | PDF + JPEG generation via reportlab + bidi + PyMuPDF. 2026-09 design: watercolor bg, brand header image, oval photo, QR + voucher ID at bottom. `render_preview()` = on-the-fly draft render |
 | images.py | Voucher image library (assets/voucher_images + library.json): default + history, upload/validate |
-| settings.py | config/settings.json — default voucher location (הוד השרון) |
+| settings.py | config/settings.json — default location, notify_email, default_terms, price_list (kind × יחיד/זוגי × entries → price) |
+| database.py | engine + `_migrate()`: adds missing columns, `sent`→`active`, legacy paid rows, back-fills one consumed entry per used ticket (idempotent, runs on every startup) |
 
 ### app/routers/
 | File | Purpose |
 |------|---------|
 | auth.py | Auth routes: login, setup, WebAuthn register/verify, logout |
 | holders.py | Holder CRUD API endpoints |
-| vouchers.py | Voucher CRUD + send/resend/mark-used API + PDF/JPEG/QR serving (drafts + missing files rendered on the fly, no-store) |
-| reports.py | Report/listing/search/CSV export endpoints |
-| pages.py | HTML page routes: home, orderers, vouchers, new voucher, holder, voucher detail |
+| vouchers.py | Ticket CRUD + price / request-payment / payment-text / mark-paid / send / resend / use + entries (hold, consume, cancel, direct) + PDF/JPEG/QR serving |
+| reports.py | Report/listing/search/CSV export endpoints (kind, entries, price, payment columns) |
+| pages.py | HTML page routes + form handlers: home, orderers, tickets list, new ticket (?mobile= &kind=), holder, ticket detail, report, settings (/settings/view) |
 
 ### templates/ — Jinja2 HTML Templates
 | File | Purpose |
@@ -71,9 +73,11 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | base.html | Base layout (RTL Hebrew, Bootstrap 5, PWA, inactivity lock, logout) |
 | home.html | Search orderer page |
 | holder.html | Orderer detail + voucher list with inline actions |
-| voucher_view.html | Voucher detail: fields, action buttons (WA/email/print), send history |
-| new_voucher.html | New voucher: orderer search/create + voucher form (full page) |
-| all_vouchers.html | Main screen: all vouchers table, sortable/filterable, + שובר חדש |
+| voucher_view.html | Ticket detail: fields, payment card (price/discount, send payment request WA/email/copy, mark paid), entries card (hold / consume / cancel / walk-in), action buttons per status, send history |
+| new_voucher.html | New ticket: kind toggle (שובר/כרטיסיה), entries presets, price list lookup + discount, terms, orderer search/create |
+| all_vouchers.html | Main screen: all tickets table (kind, entries x/N, price, status), + שובר / + כרטיסיה |
+| settings.html | Price list rows + default terms + default location |
+| _macros.html | status_badge / kind_badge / entries_badge / price_text Jinja macros |
 | orderers.html | All orderers with voucher counts |
 | voucher_pdf.html | PDF template (reference only — reportlab used instead) |
 | report.html | Filterable report with CSV export |
@@ -115,6 +119,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 |------|---------|
 | test_rules.py | Rules engine unit tests (21 tests) |
 | test_api.py | API endpoint tests (32 tests incl. auth + draft preview, with auth fixture) |
+| test_tickets.py | Phase A: passes, pricing, payment flow, entries, holder lock, legacy-DB migration, API flow, page rendering, settings form (29 tests) |
 
 ### config/ (git-ignored)
 | File | Purpose |
@@ -122,6 +127,17 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | secret.key | Fernet encryption key for QR codes |
 | auth.json | PIN hashes + WebAuthn credentials (per user) |
 | settings.json | Default voucher location |
+
+## What Was Done This Session (2026-09-13) — V2 phase A
+- Design doc `docs/DESIGN-V2-TICKETS.md` written and approved by Koby (decisions: כרטיסיה spelling, payment link first then ticket, vouchers also via GI, price list + discount, GI creates documents, holder locks on first consumed entry, both kinds multi-entry).
+- Ticket lifecycle: draft → awaiting_payment → paid → active → used (free ticket: draft → active). Priced tickets cannot be sent before payment.
+- Entries table + rules (hold/consume/cancel/walk-in), derived counters, ticket becomes `used` when all entries consumed.
+- Manual payment ("סמן כשולם": CASH/BIT/TRANSFER/CARD) — Green Invoice link/webhook is phase B (not started).
+- Payment request message text (product, price, terms) sent by WA/email/copy; logged as sendings.kind=PAYMENT_LINK.
+- PDF: pass layout ("כרטיסיה — גלים ונפש", N טיפולי וואטסו, על שם, punch circles); multi-entry voucher gets "N טיפולי וואטסו" + circles. Verified visually.
+- Settings page: price list + default terms + default location. Terms seed text is a placeholder — Koby/Avigal to edit.
+- All templates re-labelled שובר → כרטיס where generic; nav has הגדרות.
+- Local dev DB migrated automatically (3 sent → active). Test tickets created during smoke test were deleted. ⚠️ One notification e-mail for test pass 0523281250-004 may have reached kobysheftel@gmail.com — ignore it.
 
 ## What Was Done This Session (2026-09-09)
 - Read the whole project; startup review found `.gitignore` inline comments broke `config/` + `vouchers/` patterns (auth.json + customer PDFs were tracked in the public repo) → fixed, files untracked locally and on production (prod auth.json untouched, checksum verified). Old commits on GitHub still contain them (history rewrite not done).
@@ -133,7 +149,10 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Wiped all 6 vouchers + 9 sendings + files on production at Koby's request; 4 orderers kept; backup `/root/vouchers-backup-20260909-1917/`.
 
 ## Next Steps to Resume
-- Ask Koby what phase 2 continues with: Green Invoice API (roadmap V2), QR redemption scan page, real email sending, or more design tweaks (drop location/greeting lines?).
+- **Deploy phase A** (on Koby's request): `git push`, server `git pull && systemctl restart vouchers` — the migration runs itself on startup (no manual ALTER TABLE). Back up `/var/www/sites/vouchers/vouchers.db` first.
+- Koby to fill the price list + real terms text on /settings/view (production) and test the flow on the phone.
+- **Phase B — Green Invoice**: verify API docs (developers.morning.co / greeninvoice.docs.apiary.io — both failed to load 2026-09-13), then: create payment page in `rules.request_payment`, public webhook route `/api/payments/greeninvoice/notify` (add to `AuthMiddleware.PUBLIC_PREFIXES`), `/pay/thanks` page, credentials in `config/greeninvoice.json`.
+- Phase C: QR redeem page, auto-expire stale holds, real e-mail sending to customers.
 - Optional: rewrite GitHub history to purge old auth.json / voucher PDFs (needs force push — ask first).
 - Open since March: voucher ID = receipt number decision; WebAuthn RP_ID hardcoded to production.
 

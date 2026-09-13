@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}שובר חדש — גלים ונפש{% endblock %}
+{% block title %}כרטיס חדש — גלים ונפש{% endblock %}
 
 {% block extra_css %}
 .field-row {
@@ -33,6 +33,10 @@
 h6 { font-size: .85rem; }
 hr { margin: 8px 0; }
 
+/* Kind toggle */
+.kind-toggle .btn { flex: 1; }
+.entry-presets .btn { padding: 2px 10px; font-size: .8rem; }
+
 @media (max-width: 576px) {
   .field-label { min-width: 65px; width: 65px; font-size: .75rem; }
 }
@@ -42,22 +46,32 @@ hr { margin: 8px 0; }
 
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/all-vouchers/view">שוברים</a></li>
-    <li class="breadcrumb-item active">שובר חדש</li>
+    <li class="breadcrumb-item"><a href="/all-vouchers/view">כרטיסים</a></li>
+    <li class="breadcrumb-item active">כרטיס חדש</li>
   </ol>
 </nav>
 
 <div class="card shadow-sm mb-3">
   <div class="card-header">
-    <h5 class="mb-0">שובר חדש</h5>
+    <h5 class="mb-0" id="pageTitle">כרטיס חדש</h5>
   </div>
   <div class="card-body">
 
+    <!-- Step 0: kind -->
+    <div class="btn-group w-100 kind-toggle mb-3" role="group" aria-label="סוג כרטיס">
+      <input type="radio" class="btn-check" name="kindPick" id="kindVoucher" value="VOUCHER"
+             {% if preselect_kind != 'PASS' %}checked{% endif %} onchange="kindChanged()">
+      <label class="btn btn-outline-success" for="kindVoucher">🎁 שובר מתנה</label>
+      <input type="radio" class="btn-check" name="kindPick" id="kindPass" value="PASS"
+             {% if preselect_kind == 'PASS' %}checked{% endif %} onchange="kindChanged()">
+      <label class="btn btn-outline-primary" for="kindPass">🎫 כרטיסיה</label>
+    </div>
+
     <!-- Step 1: Find orderer -->
-    <h6 class="text-muted mb-2">פרטי המזמין</h6>
+    <h6 class="text-muted mb-2" id="ordererHeading">פרטי המזמין</h6>
 
     <div class="field-row">
-      <span class="field-label">טלפון</span>
+      <span class="field-label"><label for="searchMobile">טלפון</label></span>
       <span class="field-value d-flex gap-2">
         <input type="text" id="searchMobile" class="form-control"
                placeholder="הקש מספר טלפון..." maxlength="10"
@@ -104,13 +118,13 @@ hr { margin: 8px 0; }
         מזמין לא נמצא — מלא את הפרטים ליצירת מזמין חדש
       </div>
       <div class="field-row">
-        <span class="field-label">שם מלא *</span>
+        <span class="field-label"><label for="newName">שם מלא *</label></span>
         <span class="field-value">
-          <input type="text" id="newName" class="form-control" required/>
+          <input type="text" id="newName" class="form-control"/>
         </span>
       </div>
       <div class="field-row">
-        <span class="field-label">מייל</span>
+        <span class="field-label"><label for="newEmail">מייל</label></span>
         <span class="field-value">
           <input type="email" id="newEmail" class="form-control"/>
         </span>
@@ -119,8 +133,8 @@ hr { margin: 8px 0; }
 
     <hr class="my-3"/>
 
-    <!-- Step 2: Voucher details -->
-    <h6 class="text-muted mb-2">פרטי השובר</h6>
+    <!-- Step 2: Ticket details -->
+    <h6 class="text-muted mb-2">פרטי הכרטיס</h6>
 
     <form id="voucherForm" method="post" action="/form/vouchers/new-full">
 
@@ -128,11 +142,12 @@ hr { margin: 8px 0; }
       <input type="hidden" name="new_name" id="formNewName"/>
       <input type="hidden" name="new_email" id="formNewEmail"/>
       <input type="hidden" name="is_new_orderer" id="formIsNew" value="0"/>
+      <input type="hidden" name="kind" id="formKind" value="{{ preselect_kind }}"/>
 
       <div class="field-row">
-        <span class="field-label">סוג שובר *</span>
+        <span class="field-label"><label for="voucherType">יחיד / זוגי *</label></span>
         <span class="field-value">
-          <select name="voucher_type" class="form-select" required>
+          <select id="voucherType" name="voucher_type" class="form-select" required onchange="priceChanged()">
             <option value="יחיד">יחיד</option>
             <option value="זוגי">זוגי</option>
           </select>
@@ -140,64 +155,120 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
-        <span class="field-label">שם בשובר</span>
+        <span class="field-label"><label for="entriesTotal">טיפולים *</label></span>
+        <span class="field-value d-flex gap-2 align-items-center">
+          <input type="number" id="entriesTotal" name="entries_total" class="form-control"
+                 min="1" max="100" value="1" required style="max-width:90px" oninput="priceChanged()"/>
+          <span class="entry-presets d-flex gap-1">
+            <button type="button" class="btn btn-outline-secondary" onclick="setEntries(1)">1</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="setEntries(5)">5</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="setEntries(10)">10</button>
+          </span>
+        </span>
+      </div>
+
+      <!-- Pricing -->
+      <div class="field-row">
+        <span class="field-label"><label for="listPrice">מחירון</label></span>
+        <span class="field-value d-flex gap-2 align-items-center">
+          <input type="number" id="listPrice" name="list_price" class="form-control" min="0" step="1"
+                 placeholder="—" style="max-width:110px" oninput="recalcPrice()"/>
+          <span class="small text-muted" id="listPriceHint"></span>
+        </span>
+      </div>
+      <div class="field-row">
+        <span class="field-label"><label for="discount">הנחה (₪)</label></span>
         <span class="field-value">
-          <input type="text" name="display_name" class="form-control"
+          <input type="number" id="discount" name="discount" class="form-control" min="0" step="1"
+                 value="" style="max-width:110px" oninput="recalcPrice()"/>
+        </span>
+      </div>
+      <div class="field-row">
+        <span class="field-label"><label for="price">מחיר סופי</label></span>
+        <span class="field-value d-flex gap-2 align-items-center">
+          <input type="number" id="price" name="price" class="form-control fw-bold" min="0" step="1"
+                 style="max-width:110px"/>
+          <span class="small text-muted">ריק = ללא תשלום (הכרטיס יישלח ישירות)</span>
+        </span>
+      </div>
+
+      <!-- Voucher-only: recipient name + greeting -->
+      <div class="field-row voucher-only">
+        <span class="field-label"><label for="displayName">שם בשובר</label></span>
+        <span class="field-value">
+          <input type="text" id="displayName" name="display_name" class="form-control"
                  placeholder="איך יופיע השם בשובר"/>
           <div class="form-text small">לדוגמה: כובי, Koby — ריק = שם המזמין</div>
         </span>
       </div>
 
-      <div class="field-row">
-        <span class="field-label">מיקום</span>
+      <div class="field-row voucher-only">
+        <span class="field-label"><label for="greeting">ברכה</label></span>
         <span class="field-value">
-          <input type="text" name="location" class="form-control"
-                 value="{{ default_location }}"
-                 placeholder="מיקום הטיפול"/>
-          <div class="form-text small">ברירת מחדל — ניתן לשנות לשובר זה</div>
-        </span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">ברכה</span>
-        <span class="field-value">
-          <textarea name="greeting" class="form-control" rows="2"
+          <textarea id="greeting" name="greeting" class="form-control" rows="2"
                     placeholder="ברכה אישית שתופיע בשובר (אופציונלי)"></textarea>
         </span>
       </div>
 
-      <div class="field-row">
-        <span class="field-label">תוקף עד *</span>
+      <!-- Pass-only: name printed on the pass -->
+      <div class="field-row pass-only">
+        <span class="field-label"><label for="displayNamePass">שם בכרטיסיה</label></span>
         <span class="field-value">
-          <input type="date" name="valid_until" class="form-control"
+          <input type="text" id="displayNamePass" class="form-control"
+                 placeholder="ריק = שם המזמין" oninput="document.getElementById('displayName').value = this.value"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label"><label for="location">מיקום</label></span>
+        <span class="field-value">
+          <input type="text" id="location" name="location" class="form-control"
+                 value="{{ default_location }}"
+                 placeholder="מיקום הטיפול"/>
+          <div class="form-text small">ברירת מחדל — ניתן לשנות לכרטיס זה</div>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label"><label for="validUntil">תוקף עד *</label></span>
+        <span class="field-value">
+          <input type="date" id="validUntil" name="valid_until" class="form-control"
                  min="{{ today }}" value="{{ default_expiry }}" required/>
         </span>
       </div>
 
       <div class="field-row">
-        <span class="field-label">מס׳ קבלה</span>
+        <span class="field-label"><label for="terms">תנאים</label></span>
         <span class="field-value">
-          <input type="text" name="receipt_number" class="form-control"/>
+          <textarea id="terms" name="terms" class="form-control" rows="3">{{ default_terms }}</textarea>
+          <div class="form-text small">נשלח ללקוח עם בקשת התשלום</div>
         </span>
       </div>
 
       <div class="field-row">
-        <span class="field-label">תאריך קבלה</span>
+        <span class="field-label"><label for="receiptNumber">מס׳ קבלה</label></span>
         <span class="field-value">
-          <input type="date" name="receipt_date" class="form-control" value="{{ today }}"/>
+          <input type="text" id="receiptNumber" name="receipt_number" class="form-control"/>
         </span>
       </div>
 
       <div class="field-row">
-        <span class="field-label">הערות</span>
+        <span class="field-label"><label for="receiptDate">תאריך קבלה</label></span>
         <span class="field-value">
-          <textarea name="notes" class="form-control" rows="2"></textarea>
+          <input type="date" id="receiptDate" name="receipt_date" class="form-control" value="{{ today }}"/>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label"><label for="notes">הערות</label></span>
+        <span class="field-value">
+          <textarea id="notes" name="notes" class="form-control" rows="2"></textarea>
         </span>
       </div>
 
       <div class="d-flex gap-2 mt-3">
         <button type="submit" class="btn btn-success btn-lg flex-fill" id="submitBtn" disabled>
-          צור שובר
+          צור כרטיס
         </button>
         <a href="/all-vouchers/view" class="btn btn-outline-secondary btn-lg">ביטול</a>
       </div>
@@ -211,7 +282,64 @@ hr { margin: 8px 0; }
 var selectedMobile = '';
 var isNewOrderer = false;
 
-// Search orderer by phone as user types
+// Price list from settings: [{kind, voucher_type, entries, price}]
+var PRICE_LIST = {{ price_list_json | safe }};
+
+// ── Kind toggle ──────────────────────────────────────────────────────────────
+function currentKind() {
+  return document.getElementById('kindPass').checked ? 'PASS' : 'VOUCHER';
+}
+
+function kindChanged() {
+  var kind = currentKind();
+  document.getElementById('formKind').value = kind;
+  document.getElementById('pageTitle').textContent = kind === 'PASS' ? 'כרטיסיה חדשה' : 'שובר חדש';
+  document.getElementById('ordererHeading').textContent = kind === 'PASS' ? 'פרטי הלקוח' : 'פרטי המזמין';
+  document.querySelectorAll('.voucher-only').forEach(function(el) { el.style.display = kind === 'VOUCHER' ? '' : 'none'; });
+  document.querySelectorAll('.pass-only').forEach(function(el) { el.style.display = kind === 'PASS' ? '' : 'none'; });
+  // Sensible entry defaults: voucher 1, pass 5 (only if the user has not typed a value)
+  var ent = document.getElementById('entriesTotal');
+  if (!ent.dataset.touched) ent.value = (kind === 'PASS') ? 5 : 1;
+  priceChanged();
+}
+
+function setEntries(n) {
+  var ent = document.getElementById('entriesTotal');
+  ent.value = n;
+  ent.dataset.touched = '1';
+  priceChanged();
+}
+document.getElementById('entriesTotal').addEventListener('input', function() { this.dataset.touched = '1'; });
+
+// ── Pricing ──────────────────────────────────────────────────────────────────
+// Look up the list price for (kind, type, entries) and refill list price + final price
+function priceChanged() {
+  var kind = currentKind();
+  var type = document.getElementById('voucherType').value;
+  var n = parseInt(document.getElementById('entriesTotal').value) || 0;
+  var hit = PRICE_LIST.find(function(r) { return r.kind === kind && r.voucher_type === type && parseInt(r.entries) === n; });
+  var lp = document.getElementById('listPrice');
+  var hint = document.getElementById('listPriceHint');
+  if (hit) {
+    lp.value = Math.round(hit.price);
+    hint.textContent = 'לפי המחירון';
+  } else {
+    lp.value = '';
+    hint.textContent = 'אין במחירון — הזן ידנית';
+  }
+  recalcPrice();
+}
+
+// Final price = list price - discount (never negative)
+function recalcPrice() {
+  var lp = parseFloat(document.getElementById('listPrice').value);
+  var d  = parseFloat(document.getElementById('discount').value) || 0;
+  var out = document.getElementById('price');
+  if (isNaN(lp)) { out.value = ''; return; }
+  out.value = Math.max(lp - d, 0);
+}
+
+// ── Orderer search ───────────────────────────────────────────────────────────
 function searchOrderer(phone) {
   phone = phone.replace(/[\s\-]/g, '');
   if (phone.length < 3) {
@@ -221,14 +349,12 @@ function searchOrderer(phone) {
     return;
   }
 
-  // Search via API
   fetch('/holders/' + phone)
     .then(function(r) {
       if (r.ok) return r.json();
       throw new Error('not found');
     })
     .then(function(data) {
-      // Found
       selectOrderer(data.holder.mobile, data.holder.name, data.holder.email || '');
     })
     .catch(function() {
@@ -240,7 +366,6 @@ function searchOrderer(phone) {
         isNewOrderer = true;
         document.getElementById('formMobile').value = phone;
         document.getElementById('formIsNew').value = '1';
-        // Collapse the list if open
         var listEl = document.getElementById('ordererList');
         if (listEl.classList.contains('show')) {
           bootstrap.Collapse.getInstance(listEl)?.hide();
@@ -266,7 +391,6 @@ function selectOrderer(mobile, name, email) {
   document.getElementById('formMobile').value = mobile;
   document.getElementById('formIsNew').value = '0';
 
-  // Collapse the list if open
   var listEl = document.getElementById('ordererList');
   if (listEl.classList.contains('show')) {
     bootstrap.Collapse.getInstance(listEl)?.hide();
@@ -289,13 +413,7 @@ function clearOrderer() {
 
 function updateSubmitState() {
   var btn = document.getElementById('submitBtn');
-  if (selectedMobile && !isNewOrderer) {
-    btn.disabled = false;
-  } else if (isNewOrderer) {
-    btn.disabled = false;
-  } else {
-    btn.disabled = true;
-  }
+  btn.disabled = !(selectedMobile && (!isNewOrderer || isNewOrderer));
 }
 
 // Before submit — copy new orderer fields to hidden inputs
@@ -311,6 +429,12 @@ document.getElementById('voucherForm').addEventListener('submit', function(e) {
     document.getElementById('formNewEmail').value = document.getElementById('newEmail').value.trim();
   }
 });
+
+// Initial state: kind labels + price, and an orderer prefilled from ?mobile=
+kindChanged();
+{% if prefill %}
+selectOrderer('{{ prefill.mobile }}', '{{ prefill.name }}', '{{ prefill.email or '' }}');
+{% endif %}
 </script>
 
 {% endblock %}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}שובר {{ voucher.voucher_id }} — גלים ונפש{% endblock %}
+{% from "_macros.html" import status_badge, kind_badge, entries_badge %}
+{% block title %}{{ voucher.kind_display }} {{ voucher.voucher_id }} — גלים ונפש{% endblock %}
 
 {% block extra_css %}
 /* Inline label + field layout */
@@ -46,6 +47,12 @@ hr { margin: 8px 0; }
 .img-pick input:checked + img { border-color: #198754; }
 .img-pick:hover img { border-color: #adb5bd; }
 
+/* Entries */
+.entry-counter { font-size: 1.6rem; font-weight: 700; }
+.entry-row-held      { background: #fff7ed; }
+.entry-row-consumed  { background: #f0fdf4; }
+.entry-row-cancelled { color: #999; text-decoration: line-through; }
+
 @media (max-width: 576px) {
   .field-label { min-width: 65px; width: 65px; font-size: .75rem; }
   .action-btns .btn { flex: none; width: 100%; }
@@ -54,10 +61,15 @@ hr { margin: 8px 0; }
 
 {% block content %}
 
+{% set st = voucher.status %}
+{% set can_send_ticket = (st == 'paid') or (st == 'draft' and voucher.is_free) %}
+{% set needs_payment = (st in ('draft', 'awaiting_payment')) and not voucher.is_free %}
+{% set price_editable = st in ('draft', 'awaiting_payment') %}
+
 <!-- Breadcrumb -->
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/all-vouchers/view">שוברים</a></li>
+    <li class="breadcrumb-item"><a href="/all-vouchers/view">כרטיסים</a></li>
     {% if holder %}
     <li class="breadcrumb-item">
       <a href="/holders/{{ holder.mobile }}/view">{{ holder.name }}</a>
@@ -68,11 +80,12 @@ hr { margin: 8px 0; }
 </nav>
 
 <div class="card shadow-sm mb-3">
-  <div class="card-header d-flex justify-content-between align-items-center">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span class="font-monospace fw-bold">{{ voucher.voucher_id }}</span>
-    {% if voucher.status == 'draft' %}<span class="badge-draft">טיוטה</span>
-    {% elif voucher.status == 'sent' %}<span class="badge-sent">נשלח</span>
-    {% else %}<span class="badge-used">מומש</span>{% endif %}
+    <span class="d-flex gap-2 align-items-center">
+      {{ kind_badge(voucher) }}
+      {{ status_badge(voucher) }}
+    </span>
   </div>
 
   <div class="card-body">
@@ -82,7 +95,7 @@ hr { margin: 8px 0; }
     {% set d_mobile = voucher.holder_mobile or (holder.mobile if holder else '—') %}
     {% set d_email  = voucher.holder_email  or (holder.email  if holder else '') %}
 
-    <h6 class="text-muted mb-2">פרטי המזמין
+    <h6 class="text-muted mb-2">{% if voucher.is_pass %}פרטי הלקוח{% else %}פרטי המזמין{% endif %}
       {% if voucher.is_cemented %}<span class="badge bg-light text-secondary border small">מוצמד</span>{% endif %}
     </h6>
 
@@ -103,12 +116,19 @@ hr { margin: 8px 0; }
 
     <hr class="my-3"/>
 
-    <!-- Voucher fields (editable if not frozen) -->
+    <!-- Ticket fields (editable if not frozen) -->
     <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/notes">
 
       <div class="field-row">
-        <span class="field-label">סוג שובר</span>
-        <span class="field-value fw-bold fs-5">{{ voucher.voucher_type }}</span>
+        <span class="field-label">מוצר</span>
+        <span class="field-value fw-bold">{{ voucher.product_title }}</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">טיפולים</span>
+        <span class="field-value">{{ entries_badge(voucher) }}
+          <span class="text-muted small">(מומשו / סה״כ{% if voucher.entries_held %}, +משוריינים{% endif %})</span>
+        </span>
       </div>
 
       <div class="field-row">
@@ -117,9 +137,9 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
-        <span class="field-label">מס׳ קבלה</span>
+        <span class="field-label"><label for="receiptNumber">מס׳ קבלה</label></span>
         <span class="field-value">
-          <input type="text" name="receipt_number" class="form-control form-control-sm"
+          <input type="text" id="receiptNumber" name="receipt_number" class="form-control form-control-sm"
                  value="{{ voucher.receipt_number or '' }}"
                  {% if voucher.is_frozen %}readonly{% endif %}
                  onchange="this.form.submit()"/>
@@ -127,29 +147,31 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
-        <span class="field-label">תאריך קבלה</span>
+        <span class="field-label"><label for="receiptDate">תאריך קבלה</label></span>
         <span class="field-value">
-          <input type="date" name="receipt_date" class="form-control form-control-sm"
+          <input type="date" id="receiptDate" name="receipt_date" class="form-control form-control-sm"
                  value="{{ voucher.receipt_date.isoformat() if voucher.receipt_date else '' }}"
                  {% if voucher.is_frozen %}readonly{% endif %}
                  onchange="this.form.submit()"/>
         </span>
       </div>
 
+      {% if not voucher.is_pass %}
       <div class="field-row">
-        <span class="field-label">ברכה</span>
+        <span class="field-label"><label for="greeting">ברכה</label></span>
         <span class="field-value">
-          <textarea name="greeting" class="form-control form-control-sm" rows="2"
+          <textarea id="greeting" name="greeting" class="form-control form-control-sm" rows="2"
                     placeholder="ברכה אישית שתופיע בשובר (אופציונלי)"
                     {% if voucher.is_frozen %}readonly{% endif %}
                     onchange="this.form.submit()">{{ voucher.greeting or '' }}</textarea>
         </span>
       </div>
+      {% endif %}
 
       <div class="field-row">
-        <span class="field-label">הערות</span>
+        <span class="field-label"><label for="notes">הערות</label></span>
         <span class="field-value">
-          <textarea name="notes" class="form-control form-control-sm" rows="2"
+          <textarea id="notes" name="notes" class="form-control form-control-sm" rows="2"
                     {% if voucher.is_frozen %}readonly{% endif %}
                     onchange="this.form.submit()">{{ voucher.notes or '' }}</textarea>
         </span>
@@ -173,34 +195,217 @@ hr { margin: 8px 0; }
     {% if voucher.qr_path %}
     <div class="text-center my-3">
       <img src="/vouchers/{{ voucher.voucher_id }}/qr"
-           style="max-width:120px;" alt="QR"/>
+           style="max-width:120px;" alt="קוד QR של הכרטיס"/>
     </div>
     {% endif %}
 
   </div>
 </div>
 
-<!-- Location management (hidden once the voucher is used/frozen) -->
-{% if voucher.status != 'used' %}
+<!-- ── Payment card ─────────────────────────────────────────────────────────── -->
+<div class="card shadow-sm mb-3">
+  <div class="card-header small fw-bold d-flex justify-content-between align-items-center">
+    <span>תשלום</span>
+    {% if voucher.paid_at %}
+      <span class="badge-paid">שולם {{ voucher.paid_at.strftime('%d/%m/%Y') }} · {{ voucher.payment_method_display }}</span>
+    {% elif voucher.is_free %}
+      <span class="badge bg-light text-secondary border">ללא תשלום</span>
+    {% else %}
+      <span class="badge-await">טרם שולם</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+
+    {% if price_editable %}
+    <!-- Editable pricing (before payment) -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/price" class="mb-2">
+      <div class="field-row">
+        <span class="field-label"><label for="listPrice">מחירון</label></span>
+        <span class="field-value">
+          <input type="number" id="listPrice" name="list_price" class="form-control form-control-sm" min="0" step="1"
+                 value="{{ '%.0f' % voucher.list_price if voucher.list_price is not none else '' }}"
+                 oninput="recalcPrice()" style="max-width:120px"/>
+        </span>
+      </div>
+      <div class="field-row">
+        <span class="field-label"><label for="discount">הנחה (₪)</label></span>
+        <span class="field-value">
+          <input type="number" id="discount" name="discount" class="form-control form-control-sm" min="0" step="1"
+                 value="{{ '%.0f' % voucher.discount if voucher.discount else '' }}"
+                 oninput="recalcPrice()" style="max-width:120px"/>
+        </span>
+      </div>
+      <div class="field-row">
+        <span class="field-label"><label for="price">מחיר סופי</label></span>
+        <span class="field-value d-flex gap-2 align-items-center">
+          <input type="number" id="price" name="price" class="form-control form-control-sm fw-bold" min="0" step="1"
+                 value="{{ '%.0f' % voucher.price if voucher.price else '' }}" style="max-width:120px"/>
+          <button type="submit" class="btn btn-outline-primary btn-sm">שמור מחיר</button>
+        </span>
+      </div>
+    </form>
+    {% else %}
+    <div class="field-row">
+      <span class="field-label">מחיר</span>
+      <span class="field-value">
+        {% if voucher.price %}{{ '%.0f' % voucher.price }} ₪{% else %}—{% endif %}
+        {% if voucher.discount %}<span class="text-muted small">(מחירון {{ '%.0f' % voucher.list_price }} ₪, הנחה {{ '%.0f' % voucher.discount }} ₪)</span>{% endif %}
+      </span>
+    </div>
+    {% endif %}
+
+    {% if voucher.terms %}
+    <div class="field-row align-items-start">
+      <span class="field-label">תנאים</span>
+      <span class="field-value small text-muted" style="white-space: pre-line;">{{ voucher.terms }}</span>
+    </div>
+    {% endif %}
+
+    {% if needs_payment %}
+    <hr class="my-2"/>
+    <!-- Payment request: send text with price + terms (+ link in phase B) -->
+    <div class="action-btns">
+      <button type="button" class="btn btn-success" onclick="sharePayment('WA')">
+        📱 {% if st == 'awaiting_payment' %}שלח שוב{% else %}שלח{% endif %} בקשת תשלום
+      </button>
+      <button type="button" class="btn btn-info text-white" onclick="sharePayment('EMAIL')">📧 בקשת תשלום במייל</button>
+      <button type="button" class="btn btn-outline-secondary" onclick="copyPaymentText()">📋 העתק טקסט</button>
+    </div>
+
+    <!-- Manual payment -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/mark-paid"
+          class="d-flex gap-2 flex-wrap align-items-end"
+          onsubmit="return confirm('לסמן את הכרטיס כשולם?');">
+      <div>
+        <label class="form-label small text-muted mb-1" for="payMethod">שולם באמצעות</label>
+        <select id="payMethod" name="method" class="form-select form-select-sm" required>
+          {% for k, label in manual_methods.items() %}
+          <option value="{{ k }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small text-muted mb-1" for="payReceipt">מס׳ קבלה</label>
+        <input type="text" id="payReceipt" name="receipt_number" class="form-control form-control-sm" placeholder="אופציונלי"/>
+      </div>
+      <button type="submit" class="btn btn-warning btn-sm">✅ סמן כשולם</button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- ── Entries card (active / used) ─────────────────────────────────────────── -->
+{% if st in ('active', 'used') %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header small fw-bold">טיפולים</div>
+  <div class="card-body">
+
+    <div class="d-flex justify-content-around text-center mb-3">
+      <div><div class="entry-counter text-success">{{ voucher.entries_consumed }}</div><div class="small text-muted">מומשו</div></div>
+      <div><div class="entry-counter text-warning">{{ voucher.entries_held }}</div><div class="small text-muted">משוריינים</div></div>
+      <div><div class="entry-counter text-primary">{{ voucher.entries_available }}</div><div class="small text-muted">פנויים</div></div>
+      <div><div class="entry-counter text-secondary">{{ voucher.entries_total }}</div><div class="small text-muted">סה״כ</div></div>
+    </div>
+
+    {% if st == 'active' and voucher.entries_available > 0 %}
+    <!-- Hold: reserve an entry for a scheduled treatment -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/entries/hold"
+          class="d-flex gap-2 flex-wrap align-items-end mb-2">
+      <div>
+        <label class="form-label small text-muted mb-1" for="holdWhen">מועד הטיפול</label>
+        <input type="datetime-local" id="holdWhen" name="scheduled_for" class="form-control form-control-sm"/>
+      </div>
+      <div class="flex-grow-1">
+        <label class="form-label small text-muted mb-1" for="holdNote">הערה</label>
+        <input type="text" id="holdNote" name="note" class="form-control form-control-sm" placeholder="אופציונלי"/>
+      </div>
+      <button type="submit" class="btn btn-outline-warning btn-sm">📅 שריין טיפול</button>
+    </form>
+
+    <!-- Direct consume (walk-in) -->
+    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/entries/consume" class="mb-3"
+          onsubmit="return confirm('לסמן טיפול כמומש (ללא שריון)? פעולה זו בלתי הפיכה.');">
+      <button type="submit" class="btn btn-warning btn-sm">✅ מימוש טיפול עכשיו</button>
+    </form>
+    {% endif %}
+
+    {% if voucher.entries %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">סטטוס</th>
+            <th scope="col">מועד</th>
+            <th scope="col">עדכון</th>
+            <th scope="col">הערה</th>
+            <th scope="col"><span class="visually-hidden">פעולות</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in voucher.entries %}
+          <tr class="entry-row-{{ e.status }}">
+            <td>{{ e.seq }}</td>
+            <td>
+              {% if e.status == 'held' %}<span class="badge bg-warning text-dark">משוריין</span>
+              {% elif e.status == 'consumed' %}<span class="badge bg-success">מומש</span>
+              {% else %}<span class="badge bg-secondary">בוטל</span>{% endif %}
+            </td>
+            <td class="small">{{ e.scheduled_for.strftime('%d/%m/%Y %H:%M') if e.scheduled_for else '—' }}</td>
+            <td class="small text-muted">
+              {% if e.status == 'consumed' and e.consumed_at %}{{ e.consumed_at.strftime('%d/%m/%Y') }}
+              {% elif e.status == 'cancelled' and e.cancelled_at %}{{ e.cancelled_at.strftime('%d/%m/%Y') }}
+              {% elif e.held_at %}{{ e.held_at.strftime('%d/%m/%Y') }}{% endif %}
+              {% if e.performed_by %}<span class="text-secondary">({{ e.performed_by }})</span>{% endif %}
+            </td>
+            <td class="small">{{ e.note or '' }}</td>
+            <td class="text-nowrap">
+              {% if e.status == 'held' and st == 'active' %}
+              <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/entries/{{ e.id }}/consume" style="display:inline;"
+                    onsubmit="return confirm('הטיפול התקיים? לסמן כמומש.');">
+                <button type="submit" class="btn btn-outline-success btn-sm" title="מומש" aria-label="סמן טיפול כמומש">✅</button>
+              </form>
+              <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/entries/{{ e.id }}/cancel" style="display:inline;"
+                    onsubmit="return confirm('לבטל את השריון? הטיפול יחזור למכסה.');">
+                <button type="submit" class="btn btn-outline-danger btn-sm" title="בטל שריון" aria-label="בטל שריון">✕</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-muted small">עדיין לא שוריין או מומש טיפול</div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+<!-- Location management (hidden once the ticket is used/frozen) -->
+{% if st != 'used' %}
 <div class="card shadow-sm mb-3">
   <div class="card-header small fw-bold">מיקום הטיפול</div>
   <div class="card-body">
     <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/location">
       <div class="field-row">
-        <span class="field-label">מיקום</span>
+        <span class="field-label"><label for="locInput">מיקום</label></span>
         <span class="field-value">
-          <input type="text" name="location" class="form-control form-control-sm"
+          <input type="text" id="locInput" name="location" class="form-control form-control-sm"
                  value="{{ current_location }}" placeholder="מיקום הטיפול"/>
         </span>
       </div>
       <div class="mb-2">
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="radio" name="mode" id="locOnce" value="once" checked>
-          <label class="form-check-label small" for="locOnce">חד פעמי (לשובר זה)</label>
+          <label class="form-check-label small" for="locOnce">חד פעמי (לכרטיס זה)</label>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="radio" name="mode" id="locPerm" value="permanent">
-          <label class="form-check-label small" for="locPerm">קבוע (ברירת מחדל לשוברים חדשים)</label>
+          <label class="form-check-label small" for="locPerm">קבוע (ברירת מחדל לכרטיסים חדשים)</label>
         </div>
       </div>
       <button type="submit" class="btn btn-success btn-sm">שמור מיקום</button>
@@ -209,10 +414,10 @@ hr { margin: 8px 0; }
 </div>
 {% endif %}
 
-<!-- Image management (hidden once the voucher is used/frozen) -->
-{% if voucher.status != 'used' %}
+<!-- Image management (hidden once the ticket is used/frozen) -->
+{% if st != 'used' %}
 <div class="card shadow-sm mb-3">
-  <div class="card-header small fw-bold">תמונת השובר</div>
+  <div class="card-header small fw-bold">תמונת הכרטיס</div>
   <div class="card-body">
 
     <!-- Pick / revert form -->
@@ -230,11 +435,11 @@ hr { margin: 8px 0; }
       <div class="mb-2">
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="radio" name="mode" id="modeOnce" value="once" checked>
-          <label class="form-check-label small" for="modeOnce">חד פעמי (לשובר זה)</label>
+          <label class="form-check-label small" for="modeOnce">חד פעמי (לכרטיס זה)</label>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="radio" name="mode" id="modePerm" value="permanent">
-          <label class="form-check-label small" for="modePerm">קבוע (ברירת מחדל לשוברים חדשים)</label>
+          <label class="form-check-label small" for="modePerm">קבוע (ברירת מחדל לכרטיסים חדשים)</label>
         </div>
       </div>
 
@@ -246,7 +451,8 @@ hr { margin: 8px 0; }
     <!-- Upload a new image into the library -->
     <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/image/upload"
           enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
-      <input type="file" name="image" accept="image/png,image/jpeg,image/webp"
+      <label for="imgUpload" class="visually-hidden">בחר קובץ תמונה</label>
+      <input type="file" id="imgUpload" name="image" accept="image/png,image/jpeg,image/webp"
              class="form-control form-control-sm" required/>
       <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">טען תמונה חדשה</button>
     </form>
@@ -255,8 +461,8 @@ hr { margin: 8px 0; }
 </div>
 {% endif %}
 
-<!-- Send format toggle (image is the default) — shown wherever sharing is possible -->
-{% if voucher.status != 'used' %}
+<!-- Send format toggle (image is the default) — shown wherever the ticket can be shared -->
+{% if st != 'used' %}
 <div class="btn-group btn-group-sm mb-2" role="group" aria-label="פורמט שליחה">
   <input type="radio" class="btn-check" name="sendFormat" id="fmtImage" value="image" checked>
   <label class="btn btn-outline-primary" for="fmtImage">🖼️ תמונה</label>
@@ -267,17 +473,25 @@ hr { margin: 8px 0; }
 
 <!-- Action buttons -->
 <div class="action-btns">
-  {% if voucher.status == 'draft' %}
-    <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 שלח בווטסאפ</button>
+  {% if can_send_ticket %}
+    <!-- Ticket send (first send): cements, generates QR + PDF -->
+    <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 שלח {{ voucher.kind_display }} בווטסאפ</button>
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 שלח במייל</button>
     <button type="button" class="btn btn-secondary" onclick="shareVoucher('PRINT')">🖨️ הדפס</button>
-    <!-- Preview of the draft — rendered on the fly, no QR, nothing saved or sent -->
     <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
        class="btn btn-outline-secondary">👁️ תצוגה מקדימה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
        class="btn btn-outline-secondary">👁️ PDF</a>
 
-  {% elif voucher.status == 'sent' %}
+  {% elif st in ('draft', 'awaiting_payment') %}
+    <!-- Not paid yet: preview only (payment actions are in the payment card) -->
+    <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
+       class="btn btn-outline-secondary">👁️ תצוגה מקדימה</a>
+    <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
+       class="btn btn-outline-secondary">👁️ PDF</a>
+    <span class="btn btn-light disabled">הכרטיס יישלח לאחר התשלום</span>
+
+  {% elif st == 'active' %}
     <button type="button" class="btn btn-success" onclick="shareVoucher('WA')">📱 ווטסאפ</button>
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 מייל</button>
     {% if voucher.pdf_path %}
@@ -286,10 +500,6 @@ hr { margin: 8px 0; }
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
        class="btn btn-secondary">🖨️ PDF/הדפס</a>
     {% endif %}
-    <form method="post" action="/form/vouchers/{{ voucher.voucher_id }}/use" class="d-contents"
-          onsubmit="return confirm('סמן שובר כמומש? פעולה זו בלתי הפיכה');">
-      <button type="submit" class="btn btn-warning">✅ סמן כמומש</button>
-    </form>
 
   {% else %}
     {% if voucher.pdf_path %}
@@ -298,43 +508,87 @@ hr { margin: 8px 0; }
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
        class="btn btn-secondary">🖨️ PDF/הדפס</a>
     {% endif %}
-    <span class="btn btn-light disabled">✅ מומש</span>
+    <span class="btn btn-light disabled">✅ מומש במלואו</span>
   {% endif %}
 </div>
 
 <!-- Share logic: native share on mobile, fallback on desktop -->
 <script>
+var VOUCHER_ID   = '{{ voucher.voucher_id }}';
+var MOBILE       = '{{ voucher.holder_mobile or voucher.mobile }}';
+var EMAIL        = '{{ d_email }}';
+var PAYMENT_TEXT = {{ payment_text | tojson }};
+var SHARE_TITLE  = '{{ voucher.product_title }} — גלים ונפש';
+
+// Final price = list price - discount (client-side preview of the saved rule)
+function recalcPrice() {
+  var lp = parseFloat(document.getElementById('listPrice').value);
+  var d  = parseFloat(document.getElementById('discount').value) || 0;
+  var out = document.getElementById('price');
+  if (isNaN(lp)) return;
+  out.value = Math.max(lp - d, 0);
+}
+
 // Read the selected send format (defaults to image).
 function selectedFormat() {
   var el = document.querySelector('input[name="sendFormat"]:checked');
   return (el && el.value === 'pdf') ? 'pdf' : 'image';
 }
 
-async function shareVoucher(via) {
-  var voucherId = '{{ voucher.voucher_id }}';
+function waLink(text) {
+  var intl = '972' + MOBILE.substring(1);
+  return 'https://wa.me/' + intl + '?text=' + encodeURIComponent(text);
+}
 
-  // Chosen format: image (JPEG, default) or PDF
+// ── Payment request: text message (price + terms, link in phase B) ──────────
+async function sharePayment(via) {
+  var formData = new FormData();
+  formData.append('sent_via', via);
+  await fetch('/form/vouchers/' + VOUCHER_ID + '/request-payment', {method: 'POST', body: formData});
+
+  if (via === 'WA') {
+    if (navigator.share) {
+      try { await navigator.share({title: SHARE_TITLE, text: PAYMENT_TEXT}); location.reload(); return; }
+      catch (e) { /* cancelled — fall through */ }
+    }
+    window.open(waLink(PAYMENT_TEXT), '_blank');
+  } else if (via === 'EMAIL') {
+    window.location.href = 'mailto:' + EMAIL
+      + '?subject=' + encodeURIComponent(SHARE_TITLE)
+      + '&body=' + encodeURIComponent(PAYMENT_TEXT);
+  }
+  setTimeout(function() { location.reload(); }, 800);
+}
+
+async function copyPaymentText() {
+  try { await navigator.clipboard.writeText(PAYMENT_TEXT); alert('הטקסט הועתק'); }
+  catch (e) { prompt('העתק את הטקסט:', PAYMENT_TEXT); }
+}
+
+// ── Ticket send / resend ─────────────────────────────────────────────────────
+async function shareVoucher(via) {
   var fmt = selectedFormat();
   var endpoint = (fmt === 'pdf') ? '/pdf' : '/image';
   var ext  = (fmt === 'pdf') ? 'pdf' : 'jpg';
   var mime = (fmt === 'pdf') ? 'application/pdf' : 'image/jpeg';
 
-  // First: record the send/resend on server (this also generates PDF + PNG)
+  // First: record the send/resend on server (this also generates PDF + image)
   var formData = new FormData();
   formData.append('sent_via', via);
-  await fetch('/form/vouchers/' + voucherId + '/send', {method: 'POST', body: formData});
+  var resp = await fetch('/form/vouchers/' + VOUCHER_ID + '/send', {method: 'POST', body: formData});
+  if (resp.url && resp.url.indexOf('flash_type=danger') !== -1) { location.href = resp.url; return; }
 
   // Try native share (works on mobile)
   if (via === 'WA' && navigator.share) {
     try {
-      var response = await fetch('/vouchers/' + voucherId + endpoint + '?t=' + Date.now());
+      var response = await fetch('/vouchers/' + VOUCHER_ID + endpoint + '?t=' + Date.now());
       var blob = await response.blob();
-      var file = new File([blob], voucherId + '.' + ext, {type: mime});
+      var file = new File([blob], VOUCHER_ID + '.' + ext, {type: mime});
 
       if (navigator.canShare && navigator.canShare({files: [file]})) {
         await navigator.share({
-          title: 'שובר מתנה — גלים ונפש',
-          text: 'שובר מתנה מגלים ונפש',
+          title: SHARE_TITLE,
+          text: SHARE_TITLE,
           files: [file]
         });
         location.reload();
@@ -346,12 +600,8 @@ async function shareVoucher(via) {
   }
 
   // Fallback: open WhatsApp link (desktop) or reload
-  if (via === 'WA') {
-    var mobile = '{{ voucher.holder_mobile or voucher.mobile }}';
-    if (mobile) {
-      var intl = '972' + mobile.substring(1);
-      window.open('https://wa.me/' + intl + '?text=' + encodeURIComponent('שובר מתנה מגלים ונפש'), '_blank');
-    }
+  if (via === 'WA' && MOBILE) {
+    window.open(waLink(SHARE_TITLE), '_blank');
   }
 
   location.reload();
@@ -366,7 +616,10 @@ async function shareVoucher(via) {
     {% for s in voucher.sendings %}
     <li class="list-group-item small py-2">
       <div class="d-flex justify-content-between">
-        <span>{{ s.sent_via_display }}{% if s.performed_by %} <span class="text-secondary">({{ s.performed_by }})</span>{% endif %}</span>
+        <span>
+          <span class="badge bg-light text-dark border">{{ s.kind_display }}</span>
+          {{ s.sent_via_display }}{% if s.performed_by %} <span class="text-secondary">({{ s.performed_by }})</span>{% endif %}
+        </span>
         <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>
       </div>
       {% if s.note %}

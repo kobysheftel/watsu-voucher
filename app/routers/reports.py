@@ -64,6 +64,8 @@ def search(
             holder_name    = v.holder_name  or (v.holder_ref.name   if v.holder_ref else None),
             holder_mobile  = v.holder_mobile or (v.holder_ref.mobile if v.holder_ref else None),
             holder_email   = v.holder_email  or (v.holder_ref.email  if v.holder_ref else None),
+            kind           = v.kind,
+            entries_total  = v.entries_total,
             voucher_type   = v.voucher_type,
             valid_until    = v.valid_until,
             status         = v.status,
@@ -82,6 +84,7 @@ def search(
 def report(
     status_filter:  Optional[str]  = Query(None, alias="status"),
     voucher_type:   Optional[str]  = Query(None),
+    kind:           Optional[str]  = Query(None),
     mobile:         Optional[str]  = Query(None),
     date_from:      Optional[date] = Query(None),
     date_to:        Optional[date] = Query(None),
@@ -98,6 +101,8 @@ def report(
         q = q.filter(Voucher.status == status_filter)
     if voucher_type:
         q = q.filter(Voucher.voucher_type == voucher_type)
+    if kind:
+        q = q.filter(Voucher.kind == kind.upper())
     if mobile:
         q = q.filter(Voucher.mobile == mobile)
     if receipt_number:
@@ -115,7 +120,14 @@ def report(
         rows.append({
             "voucher_id":     v.voucher_id,
             "status":         v.status,
+            "kind":           v.kind_display,
             "voucher_type":   v.voucher_type,
+            "entries_total":  v.entries_total,
+            "entries_consumed": v.entries_consumed,
+            "entries_held":   v.entries_held,
+            "price":          v.price if v.price is not None else "",
+            "payment_method": v.payment_method_display,
+            "paid_at":        str(v.paid_at)[:16] if v.paid_at else "",
             "holder_name":    v.holder_name  or (v.holder_ref.name   if v.holder_ref else ""),
             "holder_mobile":  v.holder_mobile or (v.holder_ref.mobile if v.holder_ref else ""),
             "holder_email":   v.holder_email  or (v.holder_ref.email  if v.holder_ref else ""),
@@ -134,7 +146,8 @@ def report(
         output.write("\ufeff")
 
         headers = [
-            "מספר שובר", "סטטוס", "סוג", "שם מקבל", "טלפון", "אימייל",
+            "מספר כרטיס", "סטטוס", "כרטיס", "סוג", "טיפולים", "מומשו", "משוריינים",
+            "מחיר", "אמצעי תשלום", "שולם ב", "שם", "טלפון", "אימייל",
             "תוקף עד", "הונפק", "נשלח ראשון", "מספר קבלה", "תאריך קבלה", "הערות"
         ]
         writer = csv.DictWriter(
@@ -170,8 +183,9 @@ def home_data(db: Session = Depends(get_db)):
     Summary stats + recent activity for the home page.
     """
     total     = db.query(Voucher).count()
-    drafts    = db.query(Voucher).filter_by(status="draft").count()
-    sent      = db.query(Voucher).filter_by(status="sent").count()
+    drafts    = db.query(Voucher).filter(
+        Voucher.status.in_(["draft", "awaiting_payment", "paid"])).count()
+    sent      = db.query(Voucher).filter_by(status="active").count()
     used      = db.query(Voucher).filter_by(status="used").count()
     holders   = db.query(Holder).count()
 

@@ -61,14 +61,41 @@ class HolderOut(BaseModel):
 VALID_TYPES = {"יחיד", "זוגי"}
 
 
+VALID_KINDS = {"VOUCHER", "PASS"}
+
+
 class VoucherCreate(BaseModel):
-    """Create a new draft voucher."""
+    """Create a new draft ticket (gift voucher or pass)."""
     mobile: str
     voucher_type: str
     valid_until: date
+    kind: str = "VOUCHER"            # VOUCHER (gift) / PASS (self use)
+    entries_total: int = 1           # treatments included
+    list_price: Optional[float] = None
+    discount:   Optional[float] = None
+    price:      Optional[float] = None   # None + list_price → computed
+    terms:      Optional[str] = None     # None → settings default
+    display_name: Optional[str] = None
+    greeting:     Optional[str] = None
+    location:     Optional[str] = None
     receipt_number: Optional[str] = None
     receipt_date: Optional[date] = None
     notes: Optional[str] = None
+
+    @field_validator("kind")
+    @classmethod
+    def kind_valid(cls, v):
+        v = (v or "VOUCHER").upper()
+        if v not in VALID_KINDS:
+            raise ValueError("סוג כרטיס לא תקין — VOUCHER או PASS")
+        return v
+
+    @field_validator("entries_total")
+    @classmethod
+    def entries_valid(cls, v):
+        if v < 1 or v > 100:
+            raise ValueError("כמות טיפולים חייבת להיות בין 1 ל-100")
+        return v
 
     @field_validator("mobile")
     @classmethod
@@ -110,8 +137,27 @@ class SendingOut(BaseModel):
     sent_at: datetime
     sent_via: str
     sent_via_display: str   # computed property from model
+    kind: str = "TICKET"    # TICKET / PAYMENT_LINK
+    kind_display: str = ""
     note: Optional[str]
     performed_by: Optional[str] = None  # Username who performed the action
+
+    model_config = {"from_attributes": True}
+
+
+class EntryOut(BaseModel):
+    """One treatment slot of a ticket."""
+    id: int
+    voucher_id: str
+    seq: int
+    status: str            # held / consumed / cancelled
+    status_display: str
+    scheduled_for: Optional[datetime] = None
+    held_at: Optional[datetime] = None
+    consumed_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+    note: Optional[str] = None
+    performed_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -121,11 +167,16 @@ class VoucherOut(BaseModel):
     voucher_id: str
     mobile: str
     sequence: int
+    kind: str = "VOUCHER"
+    kind_display: str = ""
+    entries_total: int = 1
     voucher_type: str
+    product_title: str = ""
     valid_until: date
     issued_at: datetime
     first_sent_at: Optional[datetime]
     status: str
+    status_display: str = ""
     receipt_number: Optional[str]
     receipt_date: Optional[date]
     notes: Optional[str]
@@ -134,6 +185,22 @@ class VoucherOut(BaseModel):
     image_file: Optional[str] = None
     qr_path: Optional[str]
     pdf_path: Optional[str]
+
+    # Pricing + payment
+    list_price: Optional[float] = None
+    discount:   Optional[float] = None
+    price:      Optional[float] = None
+    terms:      Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_url:    Optional[str] = None
+    gi_document_id: Optional[str] = None
+    paid_at:        Optional[datetime] = None
+
+    # Entry counters (derived)
+    entries_consumed:  int = 0
+    entries_held:      int = 0
+    entries_available: int = 0
+    entries: List[EntryOut] = []
 
     # Cemented holder snapshot
     holder_name:   Optional[str]
@@ -155,6 +222,11 @@ class VoucherListItem(BaseModel):
     voucher_id: str
     mobile: str
     holder_name: Optional[str]
+    kind: str = "VOUCHER"
+    entries_total: int = 1
+    entries_consumed: int = 0
+    entries_held: int = 0
+    price: Optional[float] = None
     voucher_type: str
     valid_until: date
     issued_at: datetime
@@ -181,6 +253,39 @@ class SendRequest(BaseModel):
         return v
 
 
+class MarkPaidRequest(BaseModel):
+    """Body for PUT /vouchers/{id}/mark-paid (manual payment)."""
+    method: str                       # CASH / BIT / TRANSFER / CARD
+    receipt_number: Optional[str] = None
+
+    @field_validator("method")
+    @classmethod
+    def method_valid(cls, v):
+        allowed = {"CASH", "BIT", "TRANSFER", "CARD"}
+        v = (v or "").upper()
+        if v not in allowed:
+            raise ValueError(f"אמצעי תשלום חייב להיות אחד מ: {', '.join(sorted(allowed))}")
+        return v
+
+
+class PriceUpdate(BaseModel):
+    """Body for PUT /vouchers/{id}/price (before payment only)."""
+    list_price: Optional[float] = None
+    discount:   Optional[float] = None
+    price:      Optional[float] = None
+
+
+class HoldRequest(BaseModel):
+    """Body for POST /vouchers/{id}/entries/hold."""
+    scheduled_for: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+class EntryActionRequest(BaseModel):
+    """Body for consume / cancel / direct-consume actions."""
+    note: Optional[str] = None
+
+
 # ── Search / Report schemas ───────────────────────────────────────────────────
 
 class SearchResult(BaseModel):
@@ -189,6 +294,8 @@ class SearchResult(BaseModel):
     holder_name: Optional[str]
     holder_mobile: Optional[str]
     holder_email: Optional[str]
+    kind: str = "VOUCHER"
+    entries_total: int = 1
     voucher_type: str
     valid_until: date
     status: str

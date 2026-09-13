@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}הגדרות — גלים ונפש{% endblock %}
+
+{% block extra_css %}
+.pl-table input, .pl-table select { font-size: .9rem; padding: 4px 8px; }
+.pl-table td { vertical-align: middle; }
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/home">ראשי</a></li>
+    <li class="breadcrumb-item active">הגדרות</li>
+  </ol>
+</nav>
+
+<form method="post" action="/form/settings">
+
+  <!-- Price list -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-bold">מחירון</span>
+      <button type="button" class="btn btn-outline-primary btn-sm" onclick="addRow()">+ שורה</button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 pl-table" id="priceTable">
+          <thead class="table-light">
+            <tr>
+              <th scope="col">סוג כרטיס</th>
+              <th scope="col">יחיד / זוגי</th>
+              <th scope="col">טיפולים</th>
+              <th scope="col">מחיר (₪)</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in price_list %}
+            <tr>
+              <td>
+                <select name="pl_kind" class="form-select form-select-sm" aria-label="סוג כרטיס">
+                  <option value="VOUCHER" {% if row.kind == 'VOUCHER' %}selected{% endif %}>שובר</option>
+                  <option value="PASS"    {% if row.kind == 'PASS'    %}selected{% endif %}>כרטיסיה</option>
+                </select>
+              </td>
+              <td>
+                <select name="pl_type" class="form-select form-select-sm" aria-label="יחיד או זוגי">
+                  <option value="יחיד" {% if row.voucher_type == 'יחיד' %}selected{% endif %}>יחיד</option>
+                  <option value="זוגי" {% if row.voucher_type == 'זוגי' %}selected{% endif %}>זוגי</option>
+                </select>
+              </td>
+              <td><input type="number" name="pl_entries" class="form-control form-control-sm"
+                         min="1" max="100" value="{{ row.entries }}" aria-label="טיפולים" required/></td>
+              <td><input type="number" name="pl_price" class="form-control form-control-sm"
+                         min="0" step="1" value="{{ '%.0f' % row.price }}" aria-label="מחיר" required/></td>
+              <td><button type="button" class="btn btn-outline-danger btn-sm"
+                          onclick="this.closest('tr').remove()" aria-label="מחק שורה">✕</button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if not price_list %}
+      <div class="text-muted small p-3">אין שורות במחירון עדיין — לחץ "+ שורה"</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Default terms -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-bold">תנאים (ברירת מחדל לכרטיסים חדשים)</div>
+    <div class="card-body">
+      <label for="defaultTerms" class="form-label small text-muted">
+        הטקסט נשלח ללקוח עם בקשת התשלום. שינוי כאן לא משפיע על כרטיסים שכבר נוצרו.
+      </label>
+      <textarea id="defaultTerms" name="default_terms" class="form-control" rows="5">{{ default_terms }}</textarea>
+    </div>
+  </div>
+
+  <!-- Default location -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-bold">מיקום הטיפול (ברירת מחדל)</div>
+    <div class="card-body">
+      <label for="defaultLocation" class="visually-hidden">מיקום</label>
+      <input id="defaultLocation" type="text" name="default_location" class="form-control"
+             value="{{ default_location }}"/>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-success btn-lg flex-fill">שמור הגדרות</button>
+    <a href="/home" class="btn btn-outline-secondary btn-lg">ביטול</a>
+  </div>
+</form>
+
+<!-- Hidden template row for "+ שורה" -->
+<template id="rowTemplate">
+  <tr>
+    <td>
+      <select name="pl_kind" class="form-select form-select-sm" aria-label="סוג כרטיס">
+        <option value="VOUCHER">שובר</option>
+        <option value="PASS">כרטיסיה</option>
+      </select>
+    </td>
+    <td>
+      <select name="pl_type" class="form-select form-select-sm" aria-label="יחיד או זוגי">
+        <option value="יחיד">יחיד</option>
+        <option value="זוגי">זוגי</option>
+      </select>
+    </td>
+    <td><input type="number" name="pl_entries" class="form-control form-control-sm" min="1" max="100" value="1" aria-label="טיפולים" required/></td>
+    <td><input type="number" name="pl_price" class="form-control form-control-sm" min="0" step="1" value="0" aria-label="מחיר" required/></td>
+    <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()" aria-label="מחק שורה">✕</button></td>
+  </tr>
+</template>
+
+<script>
+// Append a blank price-list row from the template
+function addRow() {
+  var tpl = document.getElementById('rowTemplate');
+  var tbody = document.querySelector('#priceTable tbody');
+  tbody.appendChild(tpl.content.cloneNode(true));
+}
+</script>
+
+{% endblock %}

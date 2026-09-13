@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}שוברים — גלים ונפש{% endblock %}
+{% from "_macros.html" import status_badge, kind_badge, entries_badge, price_text %}
+{% block title %}כרטיסים — גלים ונפש{% endblock %}
 
 {% block extra_css %}
 th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
@@ -20,9 +21,10 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h4 class="mb-0">שוברים ({{ vouchers | length }})</h4>
-  <div class="d-flex gap-2">
-    <a href="/vouchers/new/view" class="btn btn-success btn-lg">+ שובר חדש</a>
+  <h4 class="mb-0">כרטיסים ({{ vouchers | length }})</h4>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="/vouchers/new/view?kind=VOUCHER" class="btn btn-success btn-lg">+ שובר</a>
+    <a href="/vouchers/new/view?kind=PASS" class="btn btn-primary btn-lg">+ כרטיסיה</a>
     <a href="/report?fmt=csv" class="btn btn-outline-secondary">⬇️ CSV</a>
   </div>
 </div>
@@ -31,24 +33,23 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
   <table class="table table-hover mb-0" id="allVouchersTable">
     <thead class="table-light">
       <tr>
-        <th class="sortable" data-col="0">מס׳ שובר</th>
-        <th class="sortable" data-col="1">מזמין</th>
-        <th class="sortable" data-col="2">טלפון</th>
-        <th class="sortable" data-col="3">סוג</th>
-        <th class="sortable" data-col="4">סטטוס</th>
-        <th class="sortable" data-col="5">תוקף עד</th>
-        <th class="sortable" data-col="6">הונפק</th>
-        <th></th>
+        <th scope="col" class="sortable" data-col="0">מס׳ כרטיס</th>
+        <th scope="col" class="sortable" data-col="1">מזמין</th>
+        <th scope="col" class="sortable" data-col="2">טלפון</th>
+        <th scope="col" class="sortable" data-col="3">כרטיס</th>
+        <th scope="col" class="sortable" data-col="4">סוג</th>
+        <th scope="col" class="sortable" data-col="5">טיפולים</th>
+        <th scope="col" class="sortable" data-col="6">מחיר</th>
+        <th scope="col" class="sortable" data-col="7">סטטוס</th>
+        <th scope="col" class="sortable" data-col="8">תוקף עד</th>
+        <th scope="col" class="sortable" data-col="9">הונפק</th>
+        <th scope="col"><span class="visually-hidden">פעולות</span></th>
       </tr>
       <tr class="filter-row">
-        <th><input class="col-filter" data-col="0" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="1" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="2" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="3" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="4" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="5" placeholder="סנן..."/></th>
-        <th><input class="col-filter" data-col="6" placeholder="סנן..."/></th>
-        <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)">✕</button></th>
+        {% for i in range(10) %}
+        <th><input class="col-filter" data-col="{{ i }}" placeholder="סנן..." aria-label="סינון עמודה"/></th>
+        {% endfor %}
+        <th><button class="btn btn-outline-secondary btn-sm" onclick="clearFilters(this)" aria-label="נקה סינון">✕</button></th>
       </tr>
     </thead>
     <tbody>
@@ -60,32 +61,31 @@ th.sortable.desc::after { content: ' ▼'; color: #333; }
         </td>
         <td><a href="/holders/{{ v.mobile }}/view" class="text-decoration-none">{{ name }}</a></td>
         <td>{{ v.mobile }}</td>
+        <td>{{ kind_badge(v) }}</td>
         <td>{{ v.voucher_type }}</td>
-        <td>
-          {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
-          {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
-          {% else %}<span class="badge-used">מומש</span>{% endif %}
-        </td>
+        <td>{{ entries_badge(v) }}</td>
+        <td>{{ price_text(v) }}</td>
+        <td>{{ status_badge(v) }}</td>
         <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
         <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
         <td class="text-nowrap">
-          <a href="/vouchers/{{ v.voucher_id }}/view" class="btn btn-outline-primary btn-sm">📄</a>
-          <!-- PDF: saved file for sent/used vouchers, on-the-fly preview for drafts -->
+          <a href="/vouchers/{{ v.voucher_id }}/view" class="btn btn-outline-primary btn-sm" title="פתח כרטיס" aria-label="פתח כרטיס">📄</a>
+          <!-- PDF: saved file for active/used tickets, on-the-fly preview otherwise -->
           <a href="/vouchers/{{ v.voucher_id }}/pdf" target="_blank" class="btn btn-outline-secondary btn-sm"
-             title="{% if v.status == 'draft' %}תצוגה מקדימה{% else %}PDF{% endif %}">🖨️</a>
-          {% if v.status == 'sent' %}
+             title="{% if v.status in ('active', 'used') %}PDF{% else %}תצוגה מקדימה{% endif %}" aria-label="PDF">🖨️</a>
+          {% if v.status == 'active' %}
           <form method="post" action="/form/vouchers/{{ v.voucher_id }}/send" style="display:inline;">
             <input type="hidden" name="sent_via" value="WA"/>
-            <button type="submit" class="btn btn-outline-success btn-sm">📱</button>
+            <button type="submit" class="btn btn-outline-success btn-sm" title="שלח שוב בווטסאפ" aria-label="שלח שוב בווטסאפ">📱</button>
           </form>
           {% endif %}
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="8" class="text-center text-muted py-4">
-          אין שוברים עדיין —
-          <a href="/vouchers/new/view" class="btn btn-link p-0">צור שובר ראשון</a>
+        <td colspan="11" class="text-center text-muted py-4">
+          אין כרטיסים עדיין —
+          <a href="/vouchers/new/view" class="btn btn-link p-0">צור כרטיס ראשון</a>
         </td>
       </tr>
       {% endfor %}

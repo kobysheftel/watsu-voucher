@@ -130,10 +130,13 @@ def send_mail(to: str, subject: str, body: str,
 def _voucher_summary(voucher, sent_via: str, performed_by: str | None) -> str:
     """Plain-text body describing the voucher that was just produced."""
     lines = [
-        "הופק שובר חדש במערכת השוברים של גלים ונפש.",
+        "הופק כרטיס חדש במערכת השוברים של גלים ונפש.",
         "",
-        f"מס׳ שובר:     {voucher.voucher_id}",
+        f"מס׳ כרטיס:    {voucher.voucher_id}",
+        f"מוצר:         {voucher.product_title}",
         f"סוג:          {voucher.voucher_type}",
+        f"טיפולים:      {voucher.entries_total}",
+        f"מחיר:         {voucher.price or 0:,.0f} ₪  ({voucher.payment_method_display})",
         f"מזמין:        {voucher.holder_name or ''}",
         f"טלפון:        {voucher.holder_mobile or voucher.mobile}",
         f"מייל מזמין:   {voucher.holder_email or ''}",
@@ -164,7 +167,7 @@ def notify_new_voucher(voucher, sent_via: str, performed_by: str | None = None) 
         return
 
     # Snapshot everything now — the ORM object must not be touched from the thread.
-    subject = f"שובר חדש הופק: {voucher.voucher_id} ({voucher.voucher_type}) — {voucher.holder_name or ''}"
+    subject = f"{voucher.kind_display} חדש הופק: {voucher.voucher_id} ({voucher.product_title}) — {voucher.holder_name or ''}"
     body = _voucher_summary(voucher, sent_via, performed_by)
     # Attach the PDF only (Koby: the JPEG is not needed in the e-mail)
     attachments: list[Path] = []

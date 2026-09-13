@@ -148,7 +148,7 @@ def test_list_filter_by_status(client):
     v = make_voucher(client)
     client.put(f"/vouchers/{v['voucher_id']}/send", json={"sent_via": "WA"})
 
-    r = client.get("/vouchers?status=sent")
+    r = client.get("/vouchers?status=active")
     assert len(r.json()) == 1
 
     r = client.get("/vouchers?status=draft")
@@ -192,7 +192,7 @@ def test_first_send(client):
     r = client.put(f"/vouchers/{v['voucher_id']}/send", json={"sent_via": "WA"})
     assert r.status_code == 200
     data = r.json()
-    assert data["status"]       == "sent"
+    assert data["status"]       == "active"
     assert data["holder_name"]  == "שרה כהן"    # cemented
     assert data["is_cemented"]  is True
 
@@ -203,7 +203,7 @@ def test_resend(client):
     client.put(f"/vouchers/{vid}/send",   json={"sent_via": "WA"})
     r = client.put(f"/vouchers/{vid}/resend", json={"sent_via": "EMAIL"})
     assert r.status_code == 200
-    assert r.json()["status"] == "sent"
+    assert r.json()["status"] == "active"
 
 def test_mark_used(client):
     make_holder(client)

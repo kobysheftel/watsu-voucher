@@ -94,7 +94,7 @@ def test_first_send_cements_holder(db):
     v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.first_send(db, v.voucher_id, "WA")
 
-    assert v.status == "sent"
+    assert v.status == "active"
     assert v.holder_name   == "שרה כהן"
     assert v.holder_mobile == MOBILE
     assert v.holder_email  == "sara@test.com"
@@ -115,7 +115,7 @@ def test_first_send_only_from_draft(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
     v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     rules.first_send(db, v.voucher_id, "WA")
-    with pytest.raises(rules.RulesError, match="אינו בטיוטה"):
+    with pytest.raises(rules.RulesError, match="כבר נשלח"):
         rules.first_send(db, v.voucher_id, "WA")   # second call must fail
 
 def test_cement_survives_holder_edit(db):
@@ -182,7 +182,7 @@ def test_mark_used(db):
 def test_mark_used_blocks_draft(db):
     rules.get_or_create_holder(db, MOBILE, "שרה כהן", None)
     v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
-    with pytest.raises(rules.RulesError, match="טיוטה"):
+    with pytest.raises(rules.RulesError, match="טרם נשלח"):
         rules.mark_used(db, v.voucher_id)
 
 def test_mark_used_twice_fails(db):

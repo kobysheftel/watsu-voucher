@@ -191,6 +191,22 @@ def _draw_pool_photo(c: canvas.Canvas, path: Path, width: float,
         pass
 
 
+def _draw_punch_row(c: canvas.Canvas, n: int, y: float) -> None:
+    """
+    Draw n small empty circles centred on the page at baseline y —
+    the "punch card" look of a multi-treatment ticket.
+    """
+    r = 1.8 * mm            # circle radius
+    gap = 2.2 * mm          # space between circles
+    total_w = n * 2 * r + (n - 1) * gap
+    x = (_W - total_w) / 2 + r
+    c.setStrokeColor(_BLUE)
+    c.setLineWidth(0.8)
+    for _ in range(n):
+        c.circle(x, y + r, r, stroke=1, fill=0)
+        x += 2 * r + gap
+
+
 def _is_couple(voucher) -> bool:
     """True for a couple voucher (current 'זוגי' or the legacy 'לזוג' value)."""
     return voucher.voucher_type in ("זוגי", "לזוג")
@@ -240,18 +256,45 @@ def generate_pdf(voucher, folder: Path) -> Path:
                                   or images.get_default())
     _draw_pool_photo(c, pool_path, width=69 * mm, height=46 * mm, top=top(33))
 
-    # ── Title ──
-    _draw_centered_fit(c, "איזה כיף קיבלת שובר מתנה!", top(91),
-                       max_size=24, color=_BLUE, font=_FONT_TITLE)
+    # ── Title + type line (differs by kind and number of treatments) ──
+    is_pass = getattr(voucher, "kind", "VOUCHER") == "PASS"
+    n_entries = int(getattr(voucher, "entries_total", 1) or 1)
+    type_word = "זוגי" if _is_couple(voucher) else "ליחיד"
 
-    # ── Voucher type line ──
-    type_line = "טיפול וואטסו זוגי" if _is_couple(voucher) else "טיפול וואטסו ליחיד"
+    if is_pass:
+        # Pass: "כרטיסיה" headline, then "N טיפולי וואטסו ליחיד" + holder name
+        _draw_centered_fit(c, "כרטיסיה — גלים ונפש", top(91),
+                           max_size=24, color=_BLUE, font=_FONT_TITLE)
+        type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
+                     else f"טיפול וואטסו {type_word}")
+    else:
+        _draw_centered_fit(c, "איזה כיף קיבלת שובר מתנה!", top(91),
+                           max_size=24, color=_BLUE, font=_FONT_TITLE)
+        type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
+                     else f"טיפול וואטסו {type_word}")
     _draw_centered(c, type_line, top(99), font=_FONT_TITLE, size=14, color=_BLUE)
 
-    # ── Optional greeting (word-wrapped); everything below shifts down ──
     y = top(104)
+
+    # Pass: the holder's name (display_name override, else cemented / live name)
+    if is_pass:
+        name = (getattr(voucher, "display_name", None)
+                or getattr(voucher, "holder_name", None)
+                or (voucher.holder_ref.name if getattr(voucher, "holder_ref", None) else "")
+                or "").strip()
+        if name:
+            _draw_centered(c, f"על שם: {name}", y, size=11.5, color=_BLUE)
+            y -= 6 * mm
+
+    # Multi-entry: a row of small circles (punch-card look, decorative only —
+    # the real counter lives in the app). Skipped above 20 to keep it tidy.
+    if 1 < n_entries <= 20:
+        _draw_punch_row(c, n_entries, y)
+        y -= 6 * mm
+
+    # ── Optional greeting (word-wrapped); everything below shifts down ──
     greeting = (getattr(voucher, 'greeting', None) or "").strip()
-    if greeting:
+    if greeting and not is_pass:
         y = _draw_wrapped(c, greeting, y - 1 * mm, size=11, color=_BLUE,
                           line_h=5 * mm)
         y -= 1 * mm
@@ -286,7 +329,8 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     # ── Validity ──
     y -= 3 * mm
-    _draw_centered(c, "השובר בתוקף עד:", y, font=_FONT_TITLE, size=12, color=_BLUE)
+    validity_label = "הכרטיסיה בתוקף עד:" if is_pass else "השובר בתוקף עד:"
+    _draw_centered(c, validity_label, y, font=_FONT_TITLE, size=12, color=_BLUE)
     y -= 6 * mm
     _draw_centered(c, voucher.valid_until.strftime('%d/%m/%Y'), y, size=12, color=_BLUE)
 

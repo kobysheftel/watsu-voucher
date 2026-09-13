@@ -1,0 +1,25 @@
+{# Shared badges for tickets — imported by list / detail / report templates #}
+
+{% macro status_badge(v) %}
+  {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
+  {% elif v.status == 'awaiting_payment' %}<span class="badge-await">ממתין לתשלום</span>
+  {% elif v.status == 'paid' %}<span class="badge-paid">שולם</span>
+  {% elif v.status == 'active' or v.status == 'sent' %}<span class="badge-sent">פעיל</span>
+  {% else %}<span class="badge-used">מומש</span>{% endif %}
+{% endmacro %}
+
+{% macro kind_badge(v) %}
+  {% if v.kind == 'PASS' %}<span class="badge-kind badge-pass">כרטיסיה</span>
+  {% else %}<span class="badge-kind badge-voucher">שובר</span>{% endif %}
+{% endmacro %}
+
+{# consumed/total, plus "+held" when a reservation exists #}
+{% macro entries_badge(v) %}
+  <span class="badge-entries" title="מומשו / סה״כ (משוריינים)">
+    {{ v.entries_consumed }}/{{ v.entries_total }}{% if v.entries_held %} <span class="text-warning">+{{ v.entries_held }}</span>{% endif %}
+  </span>
+{% endmacro %}
+
+{% macro price_text(v) %}
+  {% if v.price %}{{ '%.0f' % v.price }} ₪{% else %}—{% endif %}
+{% endmacro %}

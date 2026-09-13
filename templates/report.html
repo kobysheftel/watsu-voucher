@@ -1,10 +1,11 @@
 {% extends "base.html" %}
-{% block title %}דוח שוברים — גלים ונפש{% endblock %}
+{% from "_macros.html" import status_badge, kind_badge, entries_badge, price_text %}
+{% block title %}דוח כרטיסים — גלים ונפש{% endblock %}
 
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0">דוח שוברים</h4>
+  <h4 class="mb-0">דוח כרטיסים</h4>
   {% if vouchers %}
   <a href="/report?{{ filter_qs }}&fmt=csv"
      class="btn btn-outline-secondary btn-sm">
@@ -18,35 +19,45 @@
   <div class="card-body">
     <form method="get" action="/report/view" class="row g-2 align-items-end">
       <div class="col-md-2">
-        <label class="form-label small text-muted">סטטוס</label>
-        <select name="status" class="form-select form-select-sm">
+        <label class="form-label small text-muted" for="fStatus">סטטוס</label>
+        <select id="fStatus" name="status" class="form-select form-select-sm">
           <option value="">הכל</option>
-          <option value="draft"  {% if filters.status == 'draft'  %}selected{% endif %}>טיוטה</option>
-          <option value="sent"   {% if filters.status == 'sent'   %}selected{% endif %}>נשלח</option>
-          <option value="used"   {% if filters.status == 'used'   %}selected{% endif %}>מומש</option>
+          <option value="draft"            {% if filters.status == 'draft'            %}selected{% endif %}>טיוטה</option>
+          <option value="awaiting_payment" {% if filters.status == 'awaiting_payment' %}selected{% endif %}>ממתין לתשלום</option>
+          <option value="paid"             {% if filters.status == 'paid'             %}selected{% endif %}>שולם</option>
+          <option value="active"           {% if filters.status == 'active'           %}selected{% endif %}>פעיל</option>
+          <option value="used"             {% if filters.status == 'used'             %}selected{% endif %}>מומש</option>
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted">סוג שובר</label>
-        <select name="voucher_type" class="form-select form-select-sm">
+        <label class="form-label small text-muted" for="fKind">כרטיס</label>
+        <select id="fKind" name="kind" class="form-select form-select-sm">
+          <option value="">הכל</option>
+          <option value="VOUCHER" {% if filters.kind == 'VOUCHER' %}selected{% endif %}>שובר</option>
+          <option value="PASS"    {% if filters.kind == 'PASS'    %}selected{% endif %}>כרטיסיה</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted" for="fType">יחיד / זוגי</label>
+        <select id="fType" name="voucher_type" class="form-select form-select-sm">
           <option value="">הכל</option>
           <option value="יחיד"  {% if filters.voucher_type == 'יחיד'  %}selected{% endif %}>יחיד</option>
           <option value="זוגי"  {% if filters.voucher_type == 'זוגי'  %}selected{% endif %}>זוגי</option>
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted">מתאריך</label>
-        <input type="date" name="date_from" class="form-control form-control-sm"
+        <label class="form-label small text-muted" for="fFrom">מתאריך</label>
+        <input id="fFrom" type="date" name="date_from" class="form-control form-control-sm"
                value="{{ filters.date_from or '' }}"/>
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted">עד תאריך</label>
-        <input type="date" name="date_to" class="form-control form-control-sm"
+        <label class="form-label small text-muted" for="fTo">עד תאריך</label>
+        <input id="fTo" type="date" name="date_to" class="form-control form-control-sm"
                value="{{ filters.date_to or '' }}"/>
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted">מס׳ קבלה</label>
-        <input type="text" name="receipt_number" class="form-control form-control-sm"
+        <label class="form-label small text-muted" for="fReceipt">מס׳ קבלה</label>
+        <input id="fReceipt" type="text" name="receipt_number" class="form-control form-control-sm"
                value="{{ filters.receipt_number or '' }}"/>
       </div>
       <div class="col-md-2 d-flex gap-1">
@@ -65,14 +76,17 @@
   <table class="table table-hover mb-0">
     <thead class="table-light">
       <tr>
-        <th>מס׳ שובר</th>
-        <th>שם</th>
-        <th>טלפון</th>
-        <th>סוג</th>
-        <th>סטטוס</th>
-        <th>תוקף עד</th>
-        <th>הונפק</th>
-        <th>מס׳ קבלה</th>
+        <th scope="col">מס׳ כרטיס</th>
+        <th scope="col">שם</th>
+        <th scope="col">טלפון</th>
+        <th scope="col">כרטיס</th>
+        <th scope="col">סוג</th>
+        <th scope="col">טיפולים</th>
+        <th scope="col">מחיר</th>
+        <th scope="col">סטטוס</th>
+        <th scope="col">תוקף עד</th>
+        <th scope="col">הונפק</th>
+        <th scope="col">מס׳ קבלה</th>
       </tr>
     </thead>
     <tbody>
@@ -86,12 +100,11 @@
           {% else %}—{% endif %}
         </td>
         <td>{{ v.mobile }}</td>
+        <td>{{ kind_badge(v) }}</td>
         <td>{{ v.voucher_type }}</td>
-        <td>
-          {% if v.status == 'draft' %}<span class="badge-draft">טיוטה</span>
-          {% elif v.status == 'sent' %}<span class="badge-sent">נשלח</span>
-          {% else %}<span class="badge-used">מומש</span>{% endif %}
-        </td>
+        <td>{{ entries_badge(v) }}</td>
+        <td>{{ price_text(v) }}</td>
+        <td>{{ status_badge(v) }}</td>
         <td>{{ v.valid_until.strftime('%d/%m/%Y') }}</td>
         <td class="text-muted small">{{ v.issued_at.strftime('%d/%m/%Y') }}</td>
         <td>{{ v.receipt_number or '—' }}</td>
@@ -102,9 +115,9 @@
 </div>
 
 {% elif filters.has_any %}
-<div class="text-center text-muted py-5">לא נמצאו שוברים התואמים את הסינון</div>
+<div class="text-center text-muted py-5">לא נמצאו כרטיסים התואמים את הסינון</div>
 {% else %}
-<div class="text-center text-muted py-5">אין שוברים עדיין</div>
+<div class="text-center text-muted py-5">אין כרטיסים עדיין</div>
 {% endif %}
 
 {% endblock %}

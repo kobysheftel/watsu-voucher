@@ -5,9 +5,17 @@ POST   /vouchers                  → create new draft
 GET    /vouchers                  → list all vouchers (filterable)
 GET    /vouchers/{id}             → full voucher details
 PUT    /vouchers/{id}             → update receipt number / date / notes
-PUT    /vouchers/{id}/send        → first send (cement + QR + PDF + log)
+PUT    /vouchers/{id}/price       → change list price / discount / price (before payment)
+PUT    /vouchers/{id}/request-payment → send payment request (draft → awaiting_payment)
+PUT    /vouchers/{id}/mark-paid   → manual payment recorded (→ paid)
+PUT    /vouchers/{id}/send        → send ticket (cement + QR + PDF + log → active)
 PUT    /vouchers/{id}/resend      → resend (reuse QR + new PDF + log)
-PUT    /vouchers/{id}/use         → mark used (freeze)
+PUT    /vouchers/{id}/use         → consume one entry directly (legacy "mark used")
+GET    /vouchers/{id}/entries     → entries (treatment slots) of the ticket
+POST   /vouchers/{id}/entries/hold            → reserve an entry (שריון)
+PUT    /vouchers/{id}/entries/{eid}/consume   → held → consumed
+PUT    /vouchers/{id}/entries/{eid}/cancel    → held → cancelled
+POST   /vouchers/{id}/entries/consume         → walk-in: consume without a hold
 GET    /vouchers/{id}/pdf         → serve PDF file
 GET    /vouchers/{id}/qr          → serve QR image
 GET    /vouchers/{id}/sendings    → full sending history
@@ -29,6 +37,7 @@ from app.models import Voucher, Sending
 from app.schemas import (
     VoucherCreate, VoucherUpdate, VoucherOut,
     VoucherListItem, SendRequest, SendingOut,
+    MarkPaidRequest, PriceUpdate, HoldRequest, EntryActionRequest, EntryOut,
 )
 from app import rules
 
@@ -40,7 +49,7 @@ router = APIRouter(prefix="/vouchers", tags=["vouchers"])
 @router.post("", response_model=VoucherOut, status_code=status.HTTP_201_CREATED)
 def create_voucher(body: VoucherCreate, db: Session = Depends(get_db)):
     """
-    Create a new draft voucher.
+    Create a new draft ticket (voucher or pass).
     The holder must already exist (use POST /holders first).
     """
     try:
@@ -52,6 +61,15 @@ def create_voucher(body: VoucherCreate, db: Session = Depends(get_db)):
             receipt_number=body.receipt_number,
             receipt_date=body.receipt_date,
             notes=body.notes,
+            display_name=body.display_name,
+            greeting=body.greeting,
+            location=body.location,
+            kind=body.kind,
+            entries_total=body.entries_total,
+            list_price=body.list_price,
+            discount=body.discount,
+            price=body.price,
+            terms=body.terms,
         )
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -67,13 +85,14 @@ def list_vouchers(
     status_filter: Optional[str]  = Query(None, alias="status"),
     mobile:        Optional[str]  = Query(None),
     voucher_type:  Optional[str]  = Query(None),
+    kind:          Optional[str]  = Query(None),
     receipt_number:Optional[str]  = Query(None),
     date_from:     Optional[date] = Query(None),
     date_to:       Optional[date] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
-    List all vouchers with optional filters.
+    List all tickets with optional filters.
     Results ordered by issued_at descending (newest first).
     """
     q = db.query(Voucher)
@@ -84,6 +103,8 @@ def list_vouchers(
         q = q.filter(Voucher.mobile == mobile)
     if voucher_type:
         q = q.filter(Voucher.voucher_type == voucher_type)
+    if kind:
+        q = q.filter(Voucher.kind == kind.upper())
     if receipt_number:
         q = q.filter(Voucher.receipt_number.ilike(f"%{receipt_number}%"))
     if date_from:
@@ -103,7 +124,7 @@ def get_voucher(voucher_id: str, db: Session = Depends(get_db)):
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"שובר לא נמצא: {voucher_id}")
+                            detail=f"כרטיס לא נמצא: {voucher_id}")
     return VoucherOut.model_validate(voucher)
 
 
@@ -130,14 +151,71 @@ def update_voucher(voucher_id: str, body: VoucherUpdate,
     return VoucherOut.model_validate(voucher)
 
 
-# ── First send ────────────────────────────────────────────────────────────────
+# ── Price ─────────────────────────────────────────────────────────────────────
+
+@router.put("/{voucher_id}/price", response_model=VoucherOut)
+def update_price(voucher_id: str, body: PriceUpdate,
+                 db: Session = Depends(get_db)):
+    """Change pricing. Allowed only before payment (draft / awaiting_payment)."""
+    try:
+        voucher = rules.set_price(db, voucher_id, body.list_price,
+                                  body.discount, body.price)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return VoucherOut.model_validate(voucher)
+
+
+# ── Payment request ───────────────────────────────────────────────────────────
+
+@router.put("/{voucher_id}/request-payment", response_model=VoucherOut)
+def request_payment(voucher_id: str, body: SendRequest,
+                    request: Request, db: Session = Depends(get_db)):
+    """
+    Record that a payment request was sent (draft → awaiting_payment).
+    Resending while awaiting payment is allowed (status unchanged).
+    """
+    username = auth_module.get_current_user(request)
+    try:
+        voucher = rules.request_payment(db, voucher_id, body.sent_via, body.note,
+                                        performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return VoucherOut.model_validate(voucher)
+
+
+@router.get("/{voucher_id}/payment-text")
+def payment_text(voucher_id: str, db: Session = Depends(get_db)):
+    """The plain-text payment request message (product, price, terms, link)."""
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
+    return {"text": rules.payment_request_text(voucher)}
+
+
+# ── Mark paid (manual) ────────────────────────────────────────────────────────
+
+@router.put("/{voucher_id}/mark-paid", response_model=VoucherOut)
+def mark_paid(voucher_id: str, body: MarkPaidRequest,
+              request: Request, db: Session = Depends(get_db)):
+    """Record a manual payment (cash / Bit / transfer / card) → status paid."""
+    username = auth_module.get_current_user(request)
+    try:
+        voucher = rules.mark_paid(db, voucher_id, body.method,
+                                  receipt_number=body.receipt_number,
+                                  performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return VoucherOut.model_validate(voucher)
+
+
+# ── Send ticket (first send) ──────────────────────────────────────────────────
 
 @router.put("/{voucher_id}/send", response_model=VoucherOut)
 def send_voucher(voucher_id: str, body: SendRequest,
                  request: Request, db: Session = Depends(get_db)):
     """
-    First send: cement holder details, generate QR + PDF, log, set status=sent.
-    Can only be called on a draft voucher.
+    Send the ticket: cement holder details, generate QR + PDF, log, status=active.
+    Allowed on a paid ticket, or a free draft.
     """
     username = auth_module.get_current_user(request)
     try:
@@ -169,13 +247,78 @@ def resend_voucher(voucher_id: str, body: SendRequest,
 # ── Mark used ─────────────────────────────────────────────────────────────────
 
 @router.put("/{voucher_id}/use", response_model=VoucherOut)
-def use_voucher(voucher_id: str, db: Session = Depends(get_db)):
+def use_voucher(voucher_id: str, request: Request, db: Session = Depends(get_db)):
     """
-    Mark voucher as used (fully frozen).
-    Can only be called on a sent voucher.
+    Consume one entry directly (legacy "mark used").
+    A single-entry ticket becomes used (fully frozen).
     """
+    username = auth_module.get_current_user(request)
     try:
-        voucher = rules.mark_used(db, voucher_id)
+        voucher = rules.mark_used(db, voucher_id, performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return VoucherOut.model_validate(voucher)
+
+
+# ── Entries (treatment slots) ─────────────────────────────────────────────────
+
+@router.get("/{voucher_id}/entries", response_model=list[EntryOut])
+def list_entries(voucher_id: str, db: Session = Depends(get_db)):
+    """All entries of a ticket, oldest first (cancelled rows included)."""
+    voucher = db.get(Voucher, voucher_id)
+    if not voucher:
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
+    return [EntryOut.model_validate(e) for e in voucher.entries]
+
+
+@router.post("/{voucher_id}/entries/hold", response_model=EntryOut,
+             status_code=status.HTTP_201_CREATED)
+def hold_entry(voucher_id: str, body: HoldRequest,
+               request: Request, db: Session = Depends(get_db)):
+    """Reserve an entry for a scheduled treatment (שריון)."""
+    username = auth_module.get_current_user(request)
+    try:
+        entry = rules.hold_entry(db, voucher_id, body.scheduled_for, body.note,
+                                 performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return EntryOut.model_validate(entry)
+
+
+@router.put("/{voucher_id}/entries/{entry_id}/consume", response_model=EntryOut)
+def consume_entry(voucher_id: str, entry_id: int, body: EntryActionRequest,
+                  request: Request, db: Session = Depends(get_db)):
+    """The scheduled treatment took place: held → consumed."""
+    username = auth_module.get_current_user(request)
+    try:
+        entry = rules.consume_entry(db, voucher_id, entry_id, body.note,
+                                    performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return EntryOut.model_validate(entry)
+
+
+@router.put("/{voucher_id}/entries/{entry_id}/cancel", response_model=EntryOut)
+def cancel_entry(voucher_id: str, entry_id: int, body: EntryActionRequest,
+                 request: Request, db: Session = Depends(get_db)):
+    """The scheduled treatment was cancelled: held → cancelled."""
+    username = auth_module.get_current_user(request)
+    try:
+        entry = rules.cancel_hold(db, voucher_id, entry_id, body.note,
+                                  performed_by=username)
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    return EntryOut.model_validate(entry)
+
+
+@router.post("/{voucher_id}/entries/consume", response_model=VoucherOut)
+def consume_direct(voucher_id: str, body: EntryActionRequest,
+                   request: Request, db: Session = Depends(get_db)):
+    """Walk-in: consume one entry without a prior hold."""
+    username = auth_module.get_current_user(request)
+    try:
+        voucher = rules.consume_direct(db, voucher_id, body.note,
+                                       performed_by=username)
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return VoucherOut.model_validate(voucher)
@@ -197,7 +340,7 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
     """Serve the voucher PDF file (rendered on the fly for drafts)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
-        raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
 
     if _needs_preview(voucher):
         from app import pdf_module
@@ -228,7 +371,7 @@ def get_image(voucher_id: str, db: Session = Depends(get_db)):
     """Serve the voucher JPEG image (the default send format; on the fly for drafts)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
-        raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
 
     from app import pdf_module
 
@@ -268,7 +411,7 @@ def get_qr(voucher_id: str, db: Session = Depends(get_db)):
     """Serve the voucher QR code image."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
-        raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
     if not voucher.qr_path or not Path(voucher.qr_path).exists():
         raise HTTPException(status_code=404, detail="QR לא נמצא — יש לשלוח תחילה")
     return FileResponse(
@@ -285,5 +428,5 @@ def get_sendings(voucher_id: str, db: Session = Depends(get_db)):
     """Return the full sending history for a voucher (newest first)."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
-        raise HTTPException(status_code=404, detail=f"שובר לא נמצא: {voucher_id}")
+        raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
     return [SendingOut.model_validate(s) for s in voucher.sendings]
