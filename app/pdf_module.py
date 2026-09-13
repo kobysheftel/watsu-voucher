@@ -13,6 +13,7 @@ Design (2026-09, Koby's Word template):
   - QR code centered at the bottom, voucher ID (no caption) under it
 """
 
+import math
 import tempfile
 from pathlib import Path
 
@@ -25,6 +26,8 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from bidi.algorithm import get_display
+from datetime import timezone
+from zoneinfo import ZoneInfo
 
 from app import images    # voucher image library (default + per-voucher override)
 from app import settings  # default voucher location/venue
@@ -191,20 +194,72 @@ def _draw_pool_photo(c: canvas.Canvas, path: Path, width: float,
         pass
 
 
-def _draw_punch_row(c: canvas.Canvas, n: int, y: float) -> None:
+def _draw_punch_row(c: canvas.Canvas, n: int, y: float, filled: int = 0) -> None:
     """
-    Draw n small empty circles centred on the page at baseline y —
-    the "punch card" look of a multi-treatment ticket.
+    Draw n small circles centred on the page at baseline y — the "punch
+    card" look of a multi-treatment ticket. The first `filled` circles are
+    drawn solid (treatments already used); the rest stay empty.
     """
     r = 1.8 * mm            # circle radius
     gap = 2.2 * mm          # space between circles
     total_w = n * 2 * r + (n - 1) * gap
-    x = (_W - total_w) / 2 + r
+    # Right-to-left: the first (used) circles sit on the right, like Hebrew reading order
+    x = (_W + total_w) / 2 - r
     c.setStrokeColor(_BLUE)
+    c.setFillColor(_BLUE)
     c.setLineWidth(0.8)
-    for _ in range(n):
-        c.circle(x, y + r, r, stroke=1, fill=0)
-        x += 2 * r + gap
+    for i in range(n):
+        c.circle(x, y + r, r, stroke=1, fill=1 if i < filled else 0)
+        x -= 2 * r + gap
+
+
+def _local_time(dt) -> str:
+    """Format a naive-UTC datetime from the DB as Israel local 'dd/mm/yyyy HH:MM'."""
+    if dt is None:
+        return ""
+    try:
+        local = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Jerusalem"))
+    except Exception:
+        local = dt
+    return local.strftime("%d/%m/%Y %H:%M")
+
+
+def _consumed_entries(voucher) -> list[tuple[int, str]]:
+    """
+    (seq, when) for every consumed entry, oldest first. `when` is the
+    scheduled treatment time when one was recorded (a hold that was
+    consumed), else the moment it was marked consumed.
+    """
+    rows = []
+    for e in getattr(voucher, "entries", None) or []:
+        if e.status != "consumed":
+            continue
+        when = e.scheduled_for.strftime("%d/%m/%Y %H:%M") if e.scheduled_for \
+            else _local_time(e.consumed_at)
+        rows.append((e.seq, when))
+    rows.sort(key=lambda r: r[0])
+    return rows
+
+
+def _draw_consumed_lines(c: canvas.Canvas, rows: list[tuple[int, str]],
+                         y: float, per_line: int = 3,
+                         line_h: float = 4.2 * mm) -> float:
+    """
+    Print the used treatments as compact "n. dd/mm/yyyy HH:MM" items,
+    `per_line` per row, centred. Returns the y below the last line.
+    """
+    if not rows:
+        return y
+    c.setFont(_FONT_BODY, 8.5)
+    c.setFillColor(_TEXT)
+    items = [f"{seq}. {when}" for seq, when in rows]
+    for i in range(0, len(items), per_line):
+        chunk = items[i:i + per_line]
+        line = "   |   ".join(chunk)
+        width = c.stringWidth(line, _FONT_BODY, 8.5)
+        c.drawString((_W - width) / 2, y, line)   # digits only — no bidi needed
+        y -= line_h
+    return y
 
 
 def _is_couple(voucher) -> bool:
@@ -251,57 +306,108 @@ def generate_pdf(voucher, folder: Path) -> Path:
     # ── Brand header image ──
     _draw_image_centered(c, _HEADER_IMG, width=62 * mm, top=top(8))
 
-    # ── Oval pool photo (per-voucher image, cemented on first send, or library default) ──
-    pool_path = images.image_path(getattr(voucher, "image_file", None)
-                                  or images.get_default())
-    _draw_pool_photo(c, pool_path, width=69 * mm, height=46 * mm, top=top(33))
-
-    # ── Title + type line (differs by kind and number of treatments) ──
+    # ── Gather the per-ticket facts that decide the layout ──
     is_pass = getattr(voucher, "kind", "VOUCHER") == "PASS"
     n_entries = int(getattr(voucher, "entries_total", 1) or 1)
     type_word = "זוגי" if _is_couple(voucher) else "ליחיד"
-
+    consumed = _consumed_entries(voucher)
+    show_circles = 1 < n_entries <= 20
+    greeting = (getattr(voucher, 'greeting', None) or "").strip()
     if is_pass:
-        # Pass: "כרטיסיה" headline, then "N טיפולי וואטסו ליחיד" + holder name
-        _draw_centered_fit(c, "כרטיסיה — גלים ונפש", top(91),
-                           max_size=24, color=_BLUE, font=_FONT_TITLE)
-        type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
-                     else f"טיפול וואטסו {type_word}")
-    else:
-        _draw_centered_fit(c, "איזה כיף קיבלת שובר מתנה!", top(91),
-                           max_size=24, color=_BLUE, font=_FONT_TITLE)
-        type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
-                     else f"טיפול וואטסו {type_word}")
-    _draw_centered(c, type_line, top(99), font=_FONT_TITLE, size=14, color=_BLUE)
-
-    y = top(104)
-
-    # Pass: the holder's name (display_name override, else cemented / live name)
+        greeting = ""                       # a pass carries no gift greeting
+    name = ""
     if is_pass:
+        # Pass: the holder's name (display_name override, else cemented / live name)
         name = (getattr(voucher, "display_name", None)
                 or getattr(voucher, "holder_name", None)
                 or (voucher.holder_ref.name if getattr(voucher, "holder_ref", None) else "")
                 or "").strip()
-        if name:
-            _draw_centered(c, f"על שם: {name}", y, size=11.5, color=_BLUE)
-            y -= 6 * mm
+    location = (getattr(voucher, 'location', None)
+                or settings.get_default_location() or "").strip()
 
-    # Multi-entry: a row of small circles (punch-card look, decorative only —
-    # the real counter lives in the app). Skipped above 20 to keep it tidy.
-    if 1 < n_entries <= 20:
-        _draw_punch_row(c, n_entries, y)
-        y -= 6 * mm
+    # ── Adaptive vertical layout ──
+    # The QR is pinned to the bottom; everything between the photo and the
+    # validity date flows downward. Optional blocks (name, punch circles, used
+    # treatments, greeting) make the flow longer, so first shrink the photo a
+    # little, then compress the gaps, so nothing ever runs into the QR.
+    id_y = 11 * mm                     # baseline of the voucher ID line
+    qr_size = 18 * mm
+    qr_y = id_y + 2.5 * mm             # QR sits just above the ID line
+    min_y = qr_y + qr_size + 4 * mm    # lowest allowed baseline for the date
+
+    optional_h = 0.0
+    if name:
+        optional_h += 6 * mm
+    if show_circles:
+        optional_h += 6 * mm
+    if consumed:
+        optional_h += 4.5 * mm + math.ceil(len(consumed) / 3) * 4.2 * mm + 1 * mm
+    if greeting:
+        optional_h += 1 * mm + 5 * mm * 2 + 1 * mm     # allow two wrapped lines
+    # Fixed part below the type line (ornament, description, contact, validity)
+    fixed_h = (6 * mm + 8 * mm) + 3 * 6.5 * mm + 3 * mm + 6 * mm + 5 * mm \
+              + (5 * mm if location else 0) + 3 * mm + 6 * mm
+
+    photo_h = 46 * mm
+    y_start = _H - (33 + 12 + 8 + 5) * mm - photo_h      # baseline after the type line
+    overflow = (optional_h + fixed_h + min_y) - y_start
+    if overflow > 0:
+        # 1. Shrink the photo (keep its oval proportions), up to 14 mm
+        shrink = min(overflow, 14 * mm)
+        photo_h -= shrink
+        y_start += shrink
+        overflow -= shrink
+    g = 1.0                                              # gap scale
+    if overflow > 0:
+        # 2. Compress every vertical gap in the flow (never below 70 %)
+        needed = optional_h + fixed_h
+        g = max(0.7, (needed - overflow) / needed)
+    photo_w = photo_h * 69 / 46
+
+    # ── Oval pool photo (per-voucher image, cemented on first send, or library default) ──
+    pool_path = images.image_path(getattr(voucher, "image_file", None)
+                                  or images.get_default())
+    _draw_pool_photo(c, pool_path, width=photo_w, height=photo_h, top=top(33))
+
+    # ── Title + type line (differs by kind and number of treatments) ──
+    y = top(33) - photo_h - 12 * mm
+    if is_pass:
+        _draw_centered_fit(c, "כרטיסיה — גלים ונפש", y,
+                           max_size=24, color=_BLUE, font=_FONT_TITLE)
+    else:
+        _draw_centered_fit(c, "איזה כיף קיבלת שובר מתנה!", y,
+                           max_size=24, color=_BLUE, font=_FONT_TITLE)
+    type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
+                 else f"טיפול וואטסו {type_word}")
+    y -= 8 * mm
+    _draw_centered(c, type_line, y, font=_FONT_TITLE, size=14, color=_BLUE)
+    y -= 5 * mm
+
+    # Pass: holder name
+    if name:
+        _draw_centered(c, f"על שם: {name}", y, size=11.5, color=_BLUE)
+        y -= 6 * mm * g
+
+    # Used treatments: filled circles + the date/time of each one, so a
+    # re-sent ticket always shows what was already used (Koby, 2026-09-13).
+    if show_circles:
+        _draw_punch_row(c, n_entries, y, filled=len(consumed))
+        y -= 6 * mm * g
+    if consumed:
+        _draw_centered(c, "טיפולים שמומשו:", y, size=9.5, color=_BLUE, font=_FONT_TITLE)
+        y -= 4.5 * mm * g
+        y = _draw_consumed_lines(c, consumed, y, line_h=4.2 * mm * g)
+        y -= 1 * mm * g
 
     # ── Optional greeting (word-wrapped); everything below shifts down ──
-    greeting = (getattr(voucher, 'greeting', None) or "").strip()
-    if greeting and not is_pass:
+    if greeting:
         y = _draw_wrapped(c, greeting, y - 1 * mm, size=11, color=_BLUE,
-                          line_h=5 * mm)
+                          line_h=5 * mm * g)
         y -= 1 * mm
 
     # ── Ornament divider ──
     orn_h = _draw_image_centered(c, _ORNAMENT, width=9 * mm, top=y)
-    y -= (orn_h or 6 * mm) + 8 * mm
+    y -= (orn_h or 6 * mm) + 8 * mm * g
 
     # ── Treatment description ──
     desc_lines = [
@@ -310,34 +416,29 @@ def generate_pdf(voucher, folder: Path) -> Path:
         "הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים.",
     ]
     for line in desc_lines:
-        _draw_centered_fit(c, line, y, max_size=11.5, color=_TEXT)
-        y -= 6.5 * mm
+        _draw_centered_fit(c, line, y, max_size=11.5 * (0.85 + 0.15 * g), color=_TEXT)
+        y -= 6.5 * mm * g
 
     # ── Contact ──
-    y -= 3 * mm
+    y -= 3 * mm * g
     _draw_centered(c, "למימוש ותיאום תאריך:", y, font=_FONT_TITLE, size=12, color=_BLUE)
-    y -= 6 * mm
+    y -= 6 * mm * g
     _draw_centered(c, "אביגל: 050-4014696", y, size=12, color=_BLUE)
-    y -= 5 * mm
+    y -= 5 * mm * g
 
     # Location / venue (per-voucher override or default), small grey line
-    location = (getattr(voucher, 'location', None)
-                or settings.get_default_location() or "").strip()
     if location:
         _draw_centered(c, location, y, size=9.5, color=_GREY)
-        y -= 5 * mm
+        y -= 5 * mm * g
 
     # ── Validity ──
-    y -= 3 * mm
+    y -= 3 * mm * g
     validity_label = "הכרטיסיה בתוקף עד:" if is_pass else "השובר בתוקף עד:"
     _draw_centered(c, validity_label, y, font=_FONT_TITLE, size=12, color=_BLUE)
-    y -= 6 * mm
-    _draw_centered(c, voucher.valid_until.strftime('%d/%m/%Y'), y, size=12, color=_BLUE)
+    y -= 6 * mm * g
+    _draw_centered(c, voucher.valid_until.strftime('%d/%m/%Y'), max(y, min_y), size=12, color=_BLUE)
 
-    # ── QR code + voucher ID — pinned to the bottom of the page ──
-    id_y = 11 * mm                     # baseline of the voucher ID line
-    qr_size = 18 * mm
-    qr_y = id_y + 2.5 * mm             # QR sits just above the ID line
+    # ── QR code + voucher ID — pinned to the bottom of the page (id_y / qr_y set above) ──
     if voucher.qr_path and Path(voucher.qr_path).exists():
         try:
             c.drawImage(ImageReader(str(voucher.qr_path)),

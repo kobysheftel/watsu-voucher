@@ -7,7 +7,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 ## Status
 - V1 complete and deployed to production; phase 2 started 2026-09-09 (new voucher design)
 - **V2 phase A (tickets + entries + manual payment) implemented locally 2026-09-13 — NOT yet deployed.** Design: `docs/DESIGN-V2-TICKETS.md`
-- 82 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 29 in tests/test_tickets.py
+- 83 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 30 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py)
 - PWA installable on smartphones
@@ -134,7 +134,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Entries table + rules (hold/consume/cancel/walk-in), derived counters, ticket becomes `used` when all entries consumed.
 - Manual payment ("סמן כשולם": CASH/BIT/TRANSFER/CARD) — Green Invoice link/webhook is phase B (not started).
 - Payment request message text (product, price, terms) sent by WA/email/copy; logged as sendings.kind=PAYMENT_LINK.
-- PDF: pass layout ("כרטיסיה — גלים ונפש", N טיפולי וואטסו, על שם, punch circles); multi-entry voucher gets "N טיפולי וואטסו" + circles. Verified visually.
+- PDF: pass layout ("כרטיסיה — גלים ונפש", N טיפולי וואטסו, על שם, punch circles); multi-entry voucher gets "N טיפולי וואטסו" + circles. Used treatments fill the circles and are listed with date & time; PDF/JPEG regenerated on every consume. Adaptive layout (photo shrink → gap compression) keeps the QR clear. Verified visually (10-entry pass with 7 used, used single voucher, plain voucher unchanged).
 - Settings page: price list + default terms + default location. Terms seed text is a placeholder — Koby/Avigal to edit.
 - All templates re-labelled שובר → כרטיס where generic; nav has הגדרות.
 - Local dev DB migrated automatically (3 sent → active). Test tickets created during smoke test were deleted. ⚠️ One notification e-mail for test pass 0523281250-004 may have reached kobysheftel@gmail.com — ignore it.

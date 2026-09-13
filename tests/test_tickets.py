@@ -300,6 +300,27 @@ def test_legacy_mark_used_on_single_voucher(db):
     assert v.entries_consumed == 1
 
 
+def test_consume_regenerates_pdf_with_dates(db):
+    """After a treatment is consumed the saved PDF is re-rendered and lists it."""
+    import fitz
+    from pathlib import Path
+    _holder(db)
+    v = _active_pass(db, entries=3)
+    pdf = Path(v.pdf_path)
+    before = pdf.stat().st_mtime_ns
+    text_before = "".join(p.get_text() for p in fitz.open(str(pdf)))
+
+    e = rules.hold_entry(db, v.voucher_id, datetime(2026, 10, 1, 10, 30))
+    rules.consume_entry(db, v.voucher_id, e.id)
+    rules.consume_direct(db, v.voucher_id)
+
+    assert pdf.stat().st_mtime_ns > before
+    text_after = "".join(p.get_text() for p in fitz.open(str(pdf)))
+    assert "01/10/2026 10:30" in text_after          # scheduled time of entry 1
+    assert "01/10/2026 10:30" not in text_before
+    assert "2. " in text_after                        # walk-in entry listed too
+
+
 # ── Holder lock (decision 6a) ─────────────────────────────────────────────────
 
 def test_holder_locked_on_first_consumed_entry(db):

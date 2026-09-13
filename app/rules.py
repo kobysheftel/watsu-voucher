@@ -512,6 +512,17 @@ def _close_if_exhausted(voucher: Voucher) -> None:
         voucher.status = STATUS_USED
 
 
+def _regenerate_pdf(voucher: Voucher) -> None:
+    """
+    Re-render PDF + image of an already-sent ticket so the printed copy shows
+    the treatments used so far. QR is reused; no sendings row is added.
+    """
+    if not voucher.pdf_path:
+        return
+    folder = _voucher_dir(voucher)
+    voucher.pdf_path = str(pdf_module.generate_pdf(voucher, folder))
+
+
 def hold_entry(db: Session, voucher_id: str,
                scheduled_for: datetime | None = None,
                note: str | None = None,
@@ -570,6 +581,7 @@ def consume_entry(db: Session, voucher_id: str, entry_id: int,
     db.flush()
     db.refresh(voucher)
     _close_if_exhausted(voucher)
+    _regenerate_pdf(voucher)        # ticket now lists this treatment's date
     db.commit()
     db.refresh(entry)
     return entry
@@ -620,6 +632,7 @@ def consume_direct(db: Session, voucher_id: str,
     db.flush()
     db.refresh(voucher)
     _close_if_exhausted(voucher)
+    _regenerate_pdf(voucher)        # ticket now lists this treatment's date
     db.commit()
     db.refresh(voucher)
     return voucher
