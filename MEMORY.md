@@ -9,7 +9,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - **V2 phase A (tickets + entries + manual payment) implemented locally 2026-09-13 — NOT yet deployed.** Design: `docs/DESIGN-V2-TICKETS.md`
 - 83 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 30 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
-- Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py)
+- Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py). Avigal PIN changed 2026-10-10 (value in app/auth.py; local + production auth.json both rehashed; `init_auth` only seeds when auth.json is missing, so a PIN change always needs the out-of-band rehash on the server)
 - PWA installable on smartphones
 - Production DB wiped of vouchers on 2026-09-09 (orderers kept); backup at `/root/vouchers-backup-20260909-1917/` on Hetzner
 
@@ -128,6 +128,11 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | auth.json | PIN hashes + WebAuthn credentials (per user) |
 | settings.json | Default voucher location |
 
+## What Was Done This Session (2026-10-10) — Avigal PIN change
+- Avigal's PIN changed (new value = seed in `app/auth.py`, `tests/test_api.py` updated, local `config/auth.json` rehashed (commit 0e0d091, NOT pushed — pushing would deploy the unreleased V2 phase A code).
+- Production: only `config/auth.json` rehashed over SSH (backup `config/auth.json.bak-<timestamp>` left next to it), `systemctl restart vouchers` — no `git pull`, V2 code still undeployed. Old PIN verified dead, new PIN verified live.
+- 83 tests passing.
+
 ## What Was Done This Session (2026-09-13) — V2 phase A
 - Design doc `docs/DESIGN-V2-TICKETS.md` written and approved by Koby (decisions: כרטיסיה spelling, payment link first then ticket, vouchers also via GI, price list + discount, GI creates documents, holder locks on first consumed entry, both kinds multi-entry).
 - Ticket lifecycle: draft → awaiting_payment → paid → active → used (free ticket: draft → active). Priced tickets cannot be sent before payment.
@@ -149,6 +154,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Wiped all 6 vouchers + 9 sendings + files on production at Koby's request; 4 orderers kept; backup `/root/vouchers-backup-20260909-1917/`.
 
 ## Next Steps to Resume
+- Commit 0e0d091 (Avigal PIN seed) is local only — it goes out with the phase A push below. ⚠️ Seed PINs live in `app/auth.py` in a PUBLIC GitHub repo — consider moving seeds to config/ (git-ignored) before the next push.
 - **Deploy phase A** (on Koby's request): `git push`, server `git pull && systemctl restart vouchers` — the migration runs itself on startup (no manual ALTER TABLE). Back up `/var/www/sites/vouchers/vouchers.db` first.
 - Koby to fill the price list + real terms text on /settings/view (production) and test the flow on the phone.
 - **Phase B — Green Invoice**: verify API docs (developers.morning.co / greeninvoice.docs.apiary.io — both failed to load 2026-09-13), then: create payment page in `rules.request_payment`, public webhook route `/api/payments/greeninvoice/notify` (add to `AuthMiddleware.PUBLIC_PREFIXES`), `/pay/thanks` page, credentials in `config/greeninvoice.json`.
