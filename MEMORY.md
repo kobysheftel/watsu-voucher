@@ -177,8 +177,8 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Wiped all 6 vouchers + 9 sendings + files on production at Koby's request; 4 orderers kept; backup `/root/vouchers-backup-20260909-1917/`.
 
 ## Next Steps to Resume
-- Everything is deployed (2026-10-22): local = GitHub = production at commit "save 2026-10-22". Nothing pending in code.
-- Koby / Avigal to fill the price list + real terms text (Hebrew AND English) and check both default locations on https://vouchers.soulwaves.org/settings/view, then test the flow on the phone (create an English voucher, send payment request, mark paid, send).
+- Everything is deployed (2026-10-22, three deploys: V2 phase A + English tickets, bilingual documents, settings default language): local = GitHub = production at the "save 2026-10-22 15:45" commit. Nothing pending in code.
+- Koby / Avigal: on https://vouchers.soulwaves.org/settings/view choose the default ticket language, fill the price list, the real terms text (Hebrew AND English) and check both default locations; then test on the phone: create a ticket, send the payment request, mark paid, send, resend in the other language via the "שפת המסמך" toggle.
 - ⚠️ Seed PINs live in `app/auth.py` in a PUBLIC GitHub repo (now pushed) — consider moving seeds to config/ (git-ignored).
 - **Phase B — Green Invoice**: verify API docs (developers.morning.co / greeninvoice.docs.apiary.io — both failed to load 2026-09-13), then: create payment page in `rules.request_payment`, public webhook route `/api/payments/greeninvoice/notify` (add to `AuthMiddleware.PUBLIC_PREFIXES`), `/pay/thanks` page, credentials in `config/greeninvoice.json`.
 - Phase C: QR redeem page, auto-expire stale holds, real e-mail sending to customers.
