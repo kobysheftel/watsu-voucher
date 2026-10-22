@@ -125,17 +125,17 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
-        <span class="field-label"><label for="language">שפת הכרטיס</label></span>
+        <span class="field-label"><label for="language">שפת ברירת מחדל</label></span>
         <span class="field-value">
-          {% if voucher.is_cemented %}
+          {% if voucher.is_frozen %}
             {{ voucher.language_display }}
-            <span class="text-muted small">(נקבע בשליחה)</span>
           {% else %}
             <select id="language" name="language" class="form-select form-select-sm"
                     style="max-width:140px" onchange="this.form.submit()">
               <option value="he" {% if not voucher.is_english %}selected{% endif %}>עברית</option>
               <option value="en" {% if voucher.is_english %}selected{% endif %}>English</option>
             </select>
+            <span class="text-muted small">ניתן להפיק את המסמך בכל שפה (בחירה למטה)</span>
           {% endif %}
         </span>
       </div>
@@ -477,13 +477,24 @@ hr { margin: 8px 0; }
 </div>
 {% endif %}
 
-<!-- Send format toggle (image is the default) — shown wherever the ticket can be shared -->
+<!-- Send format + document language toggles — shown wherever the ticket can be shared -->
 {% if st != 'used' %}
-<div class="btn-group btn-group-sm mb-2" role="group" aria-label="פורמט שליחה">
-  <input type="radio" class="btn-check" name="sendFormat" id="fmtImage" value="image" checked>
-  <label class="btn btn-outline-primary" for="fmtImage">🖼️ תמונה</label>
-  <input type="radio" class="btn-check" name="sendFormat" id="fmtPdf" value="pdf">
-  <label class="btn btn-outline-primary" for="fmtPdf">📄 PDF</label>
+<div class="d-flex flex-wrap gap-2 mb-2">
+  <div class="btn-group btn-group-sm" role="group" aria-label="פורמט שליחה">
+    <input type="radio" class="btn-check" name="sendFormat" id="fmtImage" value="image" checked>
+    <label class="btn btn-outline-primary" for="fmtImage">🖼️ תמונה</label>
+    <input type="radio" class="btn-check" name="sendFormat" id="fmtPdf" value="pdf">
+    <label class="btn btn-outline-primary" for="fmtPdf">📄 PDF</label>
+  </div>
+  <!-- Document language: same ticket, same QR — only the printed text changes -->
+  <div class="btn-group btn-group-sm" role="group" aria-label="שפת המסמך">
+    <input type="radio" class="btn-check" name="docLang" id="langHe" value="he"
+           {% if not voucher.is_english %}checked{% endif %} onchange="docLangChanged()">
+    <label class="btn btn-outline-primary" for="langHe">עברית</label>
+    <input type="radio" class="btn-check" name="docLang" id="langEn" value="en"
+           {% if voucher.is_english %}checked{% endif %} onchange="docLangChanged()">
+    <label class="btn btn-outline-primary" for="langEn">English</label>
+  </div>
 </div>
 {% endif %}
 
@@ -495,16 +506,16 @@ hr { margin: 8px 0; }
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 שלח במייל</button>
     <button type="button" class="btn btn-secondary" onclick="shareVoucher('PRINT')">🖨️ הדפס</button>
     <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
-       class="btn btn-outline-secondary">👁️ תצוגה מקדימה</a>
+       class="btn btn-outline-secondary doc-link" data-doc="image">👁️ תצוגה מקדימה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-       class="btn btn-outline-secondary">👁️ PDF</a>
+       class="btn btn-outline-secondary doc-link" data-doc="pdf">👁️ PDF</a>
 
   {% elif st in ('draft', 'awaiting_payment') %}
     <!-- Not paid yet: preview only (payment actions are in the payment card) -->
     <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
-       class="btn btn-outline-secondary">👁️ תצוגה מקדימה</a>
+       class="btn btn-outline-secondary doc-link" data-doc="image">👁️ תצוגה מקדימה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-       class="btn btn-outline-secondary">👁️ PDF</a>
+       class="btn btn-outline-secondary doc-link" data-doc="pdf">👁️ PDF</a>
     <span class="btn btn-light disabled">הכרטיס יישלח לאחר התשלום</span>
 
   {% elif st == 'active' %}
@@ -512,9 +523,9 @@ hr { margin: 8px 0; }
     <button type="button" class="btn btn-info text-white" onclick="shareVoucher('EMAIL')">📧 מייל</button>
     {% if voucher.pdf_path %}
     <a href="/vouchers/{{ voucher.voucher_id }}/image" target="_blank"
-       class="btn btn-outline-secondary">🖼️ תמונה</a>
+       class="btn btn-outline-secondary doc-link" data-doc="image">🖼️ תמונה</a>
     <a href="/vouchers/{{ voucher.voucher_id }}/pdf" target="_blank"
-       class="btn btn-secondary">🖨️ PDF/הדפס</a>
+       class="btn btn-secondary doc-link" data-doc="pdf">🖨️ PDF/הדפס</a>
     {% endif %}
 
   {% else %}
@@ -533,8 +544,28 @@ hr { margin: 8px 0; }
 var VOUCHER_ID   = '{{ voucher.voucher_id }}';
 var MOBILE       = '{{ voucher.holder_mobile or voucher.mobile }}';
 var EMAIL        = '{{ d_email }}';
-var PAYMENT_TEXT = {{ payment_text | tojson }};
-var SHARE_TITLE  = '{{ voucher.product_title }} — גלים ונפש';
+var PAYMENT_TEXTS = { he: {{ payment_text_he | tojson }}, en: {{ payment_text_en | tojson }} };
+var SHARE_TITLES  = { he: '{{ voucher.product_title }} — גלים ונפש',
+                      en: {{ voucher.product_title_en | tojson }} + ' — Waves & Soul' };
+var DEFAULT_LANG  = '{{ voucher.language or "he" }}';
+var PAYMENT_TEXT = PAYMENT_TEXTS[DEFAULT_LANG];
+var SHARE_TITLE  = SHARE_TITLES[DEFAULT_LANG];
+
+// ── Document language (same ticket, same QR — only the printed text differs) ─
+function selectedLang() {
+  var el = document.querySelector('input[name="docLang"]:checked');
+  return (el && el.value === 'en') ? 'en' : 'he';
+}
+// Keep the message/title and the preview links in the chosen language
+function docLangChanged() {
+  var lang = selectedLang();
+  PAYMENT_TEXT = PAYMENT_TEXTS[lang];
+  SHARE_TITLE  = SHARE_TITLES[lang];
+  document.querySelectorAll('a.doc-link').forEach(function(a) {
+    var kind = a.getAttribute('data-doc');          // image / pdf
+    a.href = '/vouchers/' + VOUCHER_ID + '/' + kind + '?lang=' + lang;
+  });
+}
 
 // Final price = list price - discount (client-side preview of the saved rule)
 function recalcPrice() {
@@ -560,6 +591,7 @@ function waLink(text) {
 async function sharePayment(via) {
   var formData = new FormData();
   formData.append('sent_via', via);
+  formData.append('language', selectedLang());
   await fetch('/form/vouchers/' + VOUCHER_ID + '/request-payment', {method: 'POST', body: formData});
 
   if (via === 'WA') {
@@ -588,16 +620,20 @@ async function shareVoucher(via) {
   var ext  = (fmt === 'pdf') ? 'pdf' : 'jpg';
   var mime = (fmt === 'pdf') ? 'application/pdf' : 'image/jpeg';
 
-  // First: record the send/resend on server (this also generates PDF + image)
+  // First: record the send/resend on server (this also generates PDF + image).
+  // A first send always goes out in the ticket's default language; a resend
+  // in the language chosen in the toggle.
+  var lang = selectedLang();
   var formData = new FormData();
   formData.append('sent_via', via);
+  formData.append('language', lang);
   var resp = await fetch('/form/vouchers/' + VOUCHER_ID + '/send', {method: 'POST', body: formData});
   if (resp.url && resp.url.indexOf('flash_type=danger') !== -1) { location.href = resp.url; return; }
 
   // Try native share (works on mobile)
   if (via === 'WA' && navigator.share) {
     try {
-      var response = await fetch('/vouchers/' + VOUCHER_ID + endpoint + '?t=' + Date.now());
+      var response = await fetch('/vouchers/' + VOUCHER_ID + endpoint + '?lang=' + lang + '&t=' + Date.now());
       var blob = await response.blob();
       var file = new File([blob], VOUCHER_ID + '.' + ext, {type: mime});
 
@@ -622,6 +658,9 @@ async function shareVoucher(via) {
 
   location.reload();
 }
+
+// Initial state: links and texts follow the default language toggle
+if (document.querySelector('input[name="docLang"]')) docLangChanged();
 </script>
 
 <!-- Sending history -->
@@ -634,6 +673,7 @@ async function shareVoucher(via) {
       <div class="d-flex justify-content-between">
         <span>
           <span class="badge bg-light text-dark border">{{ s.kind_display }}</span>
+          {% if s.language_display %}<span class="badge bg-light text-dark border">{{ s.language_display }}</span>{% endif %}
           {{ s.sent_via_display }}{% if s.performed_by %} <span class="text-secondary">({{ s.performed_by }})</span>{% endif %}
         </span>
         <span class="text-muted">{{ s.sent_at.strftime('%d/%m/%Y %H:%M') }}</span>

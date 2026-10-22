@@ -8,7 +8,8 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - V1 complete and deployed to production; phase 2 started 2026-09-09 (new voucher design)
 - V2 phase A (tickets + entries + manual payment) implemented 2026-09-13, deployed 2026-10-22. Design: `docs/DESIGN-V2-TICKETS.md`
 - **V2 phase A + English tickets DEPLOYED to production 2026-10-22 11:50** (commit 425a7a6; pre-deploy backups on server: `vouchers.db.bak-20261022-*`, `config/settings.json.bak-20261022-*`). Migration verified: 3 active tickets, `language` column present.
-- 90 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 37 in tests/test_tickets.py
+- **Bilingual documents deployed 2026-10-22 (second deploy of the day)**: `language` = default document language (he unless set), editable until used; the other language is produced on demand (`voucher.<lang>.pdf/.jpg`, same QR); `sendings.language` logged; ticket page has a document-language toggle.
+- 93 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 40 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py). Avigal PIN changed 2026-10-10 (value in app/auth.py; local + production auth.json both rehashed; `init_auth` only seeds when auth.json is missing, so a PIN change always needs the out-of-band rehash on the server)
 - PWA installable on smartphones
@@ -129,11 +130,21 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | auth.json | PIN hashes + WebAuthn credentials (per user) |
 | settings.json | Default voucher location |
 
+## What Was Done This Session (2026-10-22, part 2) — one ticket, two languages
+- Koby: "allow producing an existing voucher in a different language. the metadata is the same, document in the 2 languages, default is hebrew".
+- `vouchers.language` is now the DEFAULT document language, editable until used (changing it on a sent ticket deletes the old voucher*.pdf/jpg and re-renders the default; QR untouched).
+- Files: `voucher.pdf`/`voucher.jpg` = default language (pdf_path always points here); the other language = `voucher.<lang>.pdf`/`.jpg` (`pdf_module.document_names`), rendered on first request by `rules.ensure_document`, refreshed on every consume together with the default (`_regenerate_pdf`).
+- Routes: `/vouchers/{id}/pdf?lang=`, `/image?lang=`, `/payment-text?lang=` (422 on bad value); `SendRequest.language` on /resend and /request-payment; first send always uses the default language. New nullable `sendings.language` (startup migration) + `language_display`, shown as a badge in the send history.
+- Payment message in the other language uses that language's default terms from settings (the ticket's stored terms are used only when they match).
+- Ticket page: "שפת המסמך" toggle (עברית/English, starts on the default) next to the image/PDF toggle; drives preview/PDF links (`a.doc-link`), WA share file, share title, payment text and the language posted with send/resend/payment request. Inline JS syntax-checked with node after render.
+- Tests: 93 (second-language document + consume refresh, default language change after send, payment text in other language, ?lang= API routes + resend logging).
+
 ## What Was Done This Session (2026-10-22) — English tickets
 - Koby: "allow english vouchers" — keep the Hebrew brand header image, English payment message too.
 - New column `vouchers.language` ('he' default / 'en'), added by `database._migrate()` on startup (no manual ALTER needed on the server). Chosen on the new-ticket form (עברית / English toggle), editable on the ticket page while draft/awaiting/paid, frozen on first send (`rules.update_voucher_fields` raises after cement). "EN" marker next to the kind badge in lists.
 - `pdf_module._STRINGS` holds every printed string per language; punch circles fill left-to-right on English tickets; header image stays Hebrew. `Voucher.product_title_en`, `is_english`, `language_display` added.
 - `rules.payment_request_text` → English message for English tickets (greeting, product, "Price: N ILS", terms, closing).
+- (superseded the same day by part 2: language is no longer frozen on send — see above)
 - Settings gained English defaults: `default_location_en` ("Hod HaSharon") and `default_terms_en`, editable on /settings/view; `settings.default_location_for()` / `default_terms_for()` pick by language. New-ticket form swaps location + terms to the language default when the language toggle changes (unless the user typed their own). "Make permanent" location on an English ticket updates the English default.
 - Visual check done: English voucher (greeting), English 10-entry pass with 3 used, Hebrew voucher unchanged. Admin UI stays Hebrew; notification e-mail to Koby stays Hebrew.
 - Deployed the same day: push → server git pull → `systemctl restart vouchers`. No requirements change, no manual DB step (startup migration added the column).

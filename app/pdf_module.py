@@ -311,9 +311,26 @@ _STRINGS = {
 }
 
 
-def _ticket_lang(voucher) -> str:
-    """'en' for an English ticket, else 'he'."""
-    return "en" if getattr(voucher, "language", "he") == "en" else "he"
+def _ticket_lang(voucher, language: str | None = None) -> str:
+    """
+    Language to render: an explicit `language` wins, else the ticket's default.
+    Always 'he' or 'en'.
+    """
+    lang = language or getattr(voucher, "language", "he") or "he"
+    return "en" if lang == "en" else "he"
+
+
+def document_names(voucher, language: str | None = None) -> tuple[str, str]:
+    """
+    (pdf filename, image filename) for the ticket document in `language`.
+    The ticket's default language lives in voucher.pdf / voucher.jpg (kept
+    for compatibility); the other language gets a language suffix, e.g.
+    voucher.en.pdf / voucher.en.jpg.
+    """
+    lang = _ticket_lang(voucher, language)
+    if lang == _ticket_lang(voucher):
+        return "voucher.pdf", IMAGE_FILENAME
+    return f"voucher.{lang}.pdf", f"voucher.{lang}.jpg"
 
 
 def _is_couple(voucher) -> bool:
@@ -321,9 +338,14 @@ def _is_couple(voucher) -> bool:
     return voucher.voucher_type in ("זוגי", "לזוג")
 
 
-def generate_pdf(voucher, folder: Path) -> Path:
+def generate_pdf(voucher, folder: Path, language: str | None = None) -> Path:
     """
     Generate a single-page A5 voucher PDF in the template design.
+
+    `language` ('he' / 'en') picks the printed text; None = the ticket's
+    default language. The default-language document is voucher.pdf, the
+    other language is written as voucher.<lang>.pdf (see document_names).
+    Both carry the same QR and the same ticket data.
 
     Layout (top to bottom, all centered):
       - Watercolor water background (full page)
@@ -343,7 +365,8 @@ def generate_pdf(voucher, folder: Path) -> Path:
     """
     _register_fonts()
 
-    pdf_path = folder / "voucher.pdf"
+    pdf_name, img_name = document_names(voucher, language)
+    pdf_path = folder / pdf_name
     c = canvas.Canvas(str(pdf_path), pagesize=A5)
 
     # ── Background image (full page) ──
@@ -363,8 +386,8 @@ def generate_pdf(voucher, folder: Path) -> Path:
     # ── Gather the per-ticket facts that decide the layout ──
     is_pass = getattr(voucher, "kind", "VOUCHER") == "PASS"
     n_entries = int(getattr(voucher, "entries_total", 1) or 1)
-    lang = _ticket_lang(voucher)
-    t = _STRINGS[lang]                  # printed strings in the ticket language
+    lang = _ticket_lang(voucher, language)
+    t = _STRINGS[lang]                  # printed strings in the requested language
     type_word = t["couple"] if _is_couple(voucher) else t["single"]
     consumed = _consumed_entries(voucher)
     show_circles = 1 < n_entries <= 20
@@ -498,15 +521,16 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     c.save()
 
-    # Also render a PNG image version of the voucher (default send format).
-    generate_image(pdf_path, folder)
+    # Also render a JPEG image version of the voucher (default send format).
+    generate_image(pdf_path, folder, img_name)
 
     return pdf_path
 
 
-def render_preview(voucher) -> tuple[bytes, bytes]:
+def render_preview(voucher, language: str | None = None) -> tuple[bytes, bytes]:
     """
     Render the voucher on the fly WITHOUT touching its files or state.
+    `language` picks the document language (None = the ticket's default).
 
     Used to show a draft voucher (not yet sent) exactly as it will look —
     minus the QR, which is only generated on first send. Also used as a
@@ -516,8 +540,9 @@ def render_preview(voucher) -> tuple[bytes, bytes]:
     """
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        pdf_path = generate_pdf(voucher, folder)   # also writes the JPEG
-        return pdf_path.read_bytes(), (folder / IMAGE_FILENAME).read_bytes()
+        pdf_path = generate_pdf(voucher, folder, language)   # also writes the JPEG
+        _, img_name = document_names(voucher, language)
+        return pdf_path.read_bytes(), (folder / img_name).read_bytes()
 
 
 # Rasterization zoom factor: 3x ≈ 216 DPI — crisp Hebrew text and a scannable QR.
@@ -531,16 +556,18 @@ _IMAGE_JPEG_QUALITY = 85
 IMAGE_FILENAME = "voucher.jpg"
 
 
-def generate_image(pdf_path: Path, folder: Path) -> Path:
+def generate_image(pdf_path: Path, folder: Path,
+                   filename: str = IMAGE_FILENAME) -> Path:
     """
     Render the (already generated) voucher PDF into a JPEG image.
 
     Reuses the exact PDF design — the image is just a high-resolution raster
-    of the same single A5 page. Saved next to the PDF as voucher.jpg.
+    of the same single A5 page. Saved next to the PDF as `filename`
+    (voucher.jpg for the default language, voucher.<lang>.jpg otherwise).
 
     Returns the saved image path.
     """
-    img_path = folder / IMAGE_FILENAME
+    img_path = folder / filename
 
     # Open the PDF and rasterize its first (only) page.
     doc = fitz.open(str(pdf_path))

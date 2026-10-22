@@ -179,19 +179,23 @@ def request_payment(voucher_id: str, body: SendRequest,
     username = auth_module.get_current_user(request)
     try:
         voucher = rules.request_payment(db, voucher_id, body.sent_via, body.note,
-                                        performed_by=username)
+                                        performed_by=username, language=body.language)
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return VoucherOut.model_validate(voucher)
 
 
 @router.get("/{voucher_id}/payment-text")
-def payment_text(voucher_id: str, db: Session = Depends(get_db)):
-    """The plain-text payment request message (product, price, terms, link)."""
+def payment_text(voucher_id: str, lang: Optional[str] = Query(None),
+                 db: Session = Depends(get_db)):
+    """The plain-text payment request message (product, price, terms, link). ?lang=he|en"""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
-    return {"text": rules.payment_request_text(voucher)}
+    try:
+        return {"text": rules.payment_request_text(voucher, _lang(lang))}
+    except rules.RulesError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
 
 # ── Mark paid (manual) ────────────────────────────────────────────────────────
@@ -240,7 +244,7 @@ def resend_voucher(voucher_id: str, body: SendRequest,
     username = auth_module.get_current_user(request)
     try:
         voucher = rules.resend(db, voucher_id, body.sent_via, body.note,
-                               performed_by=username)
+                               performed_by=username, language=body.language)
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     return VoucherOut.model_validate(voucher)
@@ -328,6 +332,17 @@ def consume_direct(voucher_id: str, body: EntryActionRequest,
 
 # ── Serve PDF ─────────────────────────────────────────────────────────────────
 
+def _lang(lang: Optional[str]) -> Optional[str]:
+    """Validate an optional ?lang= query value (he / en); None = ticket default."""
+    if not lang:
+        return None
+    lang = lang.lower()
+    if lang not in ("he", "en"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            detail="lang חייב להיות he או en")
+    return lang
+
+
 def _needs_preview(voucher: Voucher) -> bool:
     """
     True when the voucher has no rendered files to serve: it is still a
@@ -338,15 +353,17 @@ def _needs_preview(voucher: Voucher) -> bool:
 
 
 @router.get("/{voucher_id}/pdf")
-def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
-    """Serve the voucher PDF file (rendered on the fly for drafts)."""
+def get_pdf(voucher_id: str, lang: Optional[str] = Query(None),
+            db: Session = Depends(get_db)):
+    """Serve the voucher PDF (rendered on the fly for drafts). ?lang=he|en picks the language."""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
+    lang = _lang(lang)
 
     if _needs_preview(voucher):
         from app import pdf_module
-        pdf_bytes, _ = pdf_module.render_preview(voucher)
+        pdf_bytes, _ = pdf_module.render_preview(voucher, lang)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -356,8 +373,11 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
             },
         )
 
+    # Sent ticket: the stored document in the requested language (rendered
+    # on first request for the non-default language).
+    pdf_path, _ = rules.ensure_document(voucher, lang)
     return FileResponse(
-        path=voucher.pdf_path,
+        path=str(pdf_path),
         media_type="application/pdf",
         filename=f"{voucher_id}.pdf",
         # The PDF is regenerated in place when the image/greeting/location
@@ -369,16 +389,18 @@ def get_pdf(voucher_id: str, db: Session = Depends(get_db)):
 # ── Serve voucher image (PNG) ─────────────────────────────────────────────────
 
 @router.get("/{voucher_id}/image")
-def get_image(voucher_id: str, db: Session = Depends(get_db)):
-    """Serve the voucher JPEG image (the default send format; on the fly for drafts)."""
+def get_image(voucher_id: str, lang: Optional[str] = Query(None),
+              db: Session = Depends(get_db)):
+    """Serve the voucher JPEG (the default send format; on the fly for drafts). ?lang=he|en"""
     voucher = db.get(Voucher, voucher_id)
     if not voucher:
         raise HTTPException(status_code=404, detail=f"כרטיס לא נמצא: {voucher_id}")
+    lang = _lang(lang)
 
     from app import pdf_module
 
     if _needs_preview(voucher):
-        _, jpg_bytes = pdf_module.render_preview(voucher)
+        _, jpg_bytes = pdf_module.render_preview(voucher, lang)
         return Response(
             content=jpg_bytes,
             media_type="image/jpeg",
@@ -388,13 +410,9 @@ def get_image(voucher_id: str, db: Session = Depends(get_db)):
             },
         )
 
-    # The image lives next to the PDF in the same voucher folder.
-    img_path = Path(voucher.pdf_path).parent / pdf_module.IMAGE_FILENAME
-
-    # Backward-compat: an older voucher may have a PDF but no image yet
-    # (or only the old voucher.png) — render the JPEG from the PDF now.
-    if not img_path.exists():
-        img_path = pdf_module.generate_image(Path(voucher.pdf_path), img_path.parent)
+    # The image lives next to the PDF in the same voucher folder; rendered
+    # now when missing (older voucher, or first request of the other language).
+    _, img_path = rules.ensure_document(voucher, lang)
 
     return FileResponse(
         path=str(img_path),

@@ -156,8 +156,9 @@ class Voucher(Base):
     # Voucher content
     voucher_type    = Column(Text, nullable=False)   # יחיד / זוגי
 
-    # Language of the printed ticket and the payment message: he (default) / en.
-    # Editable while the ticket is a draft / awaiting / paid; frozen on first send.
+    # DEFAULT language of the printed ticket and the payment message: he / en.
+    # The document can be produced in the other language at any time (same
+    # metadata, same QR) — see rules.ensure_document. Editable until used.
     language        = Column(Text, nullable=False, default=LANG_HE)
     valid_until     = Column(Date, nullable=False)
 
@@ -388,6 +389,7 @@ class Sending(Base):
     sent_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
     sent_via    = Column(Text, nullable=False)   # WA / EMAIL / PRINT
     kind        = Column(Text, nullable=False, default="TICKET")  # TICKET / PAYMENT_LINK
+    language    = Column(Text, nullable=True)    # he / en — language of the document / message sent
     note        = Column(Text, nullable=True)
     performed_by = Column(Text, nullable=True)   # Username who performed the action
 
@@ -411,6 +413,11 @@ class Sending(Base):
     @property
     def kind_display(self):
         return self.KIND_DISPLAY.get(self.kind or "TICKET", self.kind)
+
+    @property
+    def language_display(self):
+        """'עברית' / 'English', or '' for legacy rows without a language."""
+        return LANGUAGE_DISPLAY.get(self.language or "", "")
 
     def __repr__(self):
         return f"<Sending {self.id} voucher={self.voucher_id} via={self.sent_via}>"

@@ -564,17 +564,67 @@ def test_payment_text_english(db):
     assert "Book in advance with Avigal" in text
 
 
-def test_language_editable_until_sent(db):
+def test_default_language_editable_until_used(db):
+    """The default language can change even after send — the documents are re-rendered."""
+    import fitz
+    from pathlib import Path
     _holder(db)
     v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
     v = rules.update_voucher_fields(db, v.voucher_id, language="en")
     assert v.language == "en"
-    rules.first_send(db, v.voucher_id, "WA")
+    v = rules.first_send(db, v.voucher_id, "WA")
+    assert v.sendings[0].language == "en"
+    v = rules.update_voucher_fields(db, v.voucher_id, language="he")
+    assert v.language == "he"
+    text = "".join(p.get_text() for p in fitz.open(v.pdf_path))
+    assert "Voucher valid until:" not in text              # default doc is Hebrew now
+    assert not (Path(v.pdf_path).parent / "voucher.en.pdf").exists()
+    rules.mark_used(db, v.voucher_id)
     with pytest.raises(rules.RulesError):
-        rules.update_voucher_fields(db, v.voucher_id, language="he")
-    # Re-saving the same language after send is a no-op, not an error
-    v = rules.update_voucher_fields(db, v.voucher_id, language="en")
-    assert v.language == "en"
+        rules.update_voucher_fields(db, v.voucher_id, language="en")
+
+
+def test_second_language_document(db):
+    """A sent Hebrew ticket can be produced in English: same QR, extra files, both refreshed on consume."""
+    import fitz
+    from pathlib import Path
+    _holder(db)
+    v = _active_pass(db, entries=3)                         # Hebrew default
+    folder = Path(v.pdf_path).parent
+    assert not (folder / "voucher.en.pdf").exists()
+
+    pdf_en, img_en = rules.ensure_document(v, "en")
+    assert pdf_en == folder / "voucher.en.pdf" and img_en.exists()
+    text_en = "".join(p.get_text() for p in fitz.open(str(pdf_en)))
+    assert "Pass valid until:" in text_en
+    # Default document untouched and still Hebrew
+    assert v.pdf_path == str(folder / "voucher.pdf")
+    assert "Pass valid until:" not in "".join(p.get_text() for p in fitz.open(v.pdf_path))
+    # Same QR embedded: the QR file was not regenerated
+    qr_mtime = Path(v.qr_path).stat().st_mtime_ns
+
+    # Resend in English logs the language and keeps pdf_path on the default doc
+    v = rules.resend(db, v.voucher_id, "WA", language="en")
+    assert v.sendings[0].language == "en"
+    assert v.pdf_path == str(folder / "voucher.pdf")
+    assert Path(v.qr_path).stat().st_mtime_ns == qr_mtime
+
+    # Consuming an entry refreshes both documents
+    before = pdf_en.stat().st_mtime_ns
+    rules.consume_direct(db, v.voucher_id)
+    assert pdf_en.stat().st_mtime_ns > before
+    assert "Treatments used:" in "".join(p.get_text() for p in fitz.open(str(pdf_en)))
+
+
+def test_payment_text_other_language(db):
+    """The payment message can be produced in the other language (terms from that language's default)."""
+    _holder(db)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE, price=450)   # Hebrew ticket
+    assert rules.payment_request_text(v).startswith("שלום")
+    en = rules.payment_request_text(v, "en")
+    assert en.startswith("Hello") and "Book in advance with Avigal" in en
+    with pytest.raises(rules.RulesError):
+        rules.payment_request_text(v, "fr")
 
 
 def test_english_pdf_text(db):
@@ -610,6 +660,31 @@ def test_api_create_english(client):
         "valid_until": FUTURE.isoformat(), "language": "xx",
     })
     assert bad.status_code == 422
+
+
+def test_api_lang_routes(client):
+    """?lang= on /pdf /image /payment-text and language on resend; bad values are 422."""
+    client.post("/holders", json={"mobile": MOBILE, "name": "שרה כהן"})
+    r = client.post("/vouchers", json={"mobile": MOBILE, "voucher_type": "יחיד",
+                                       "valid_until": str(FUTURE), "price": 300})
+    vid = r.json()["voucher_id"]
+    # Draft: on-the-fly preview in either language
+    assert client.get(f"/vouchers/{vid}/pdf?lang=en").status_code == 200
+    assert client.get(f"/vouchers/{vid}/image?lang=en").status_code == 200
+    assert client.get(f"/vouchers/{vid}/pdf?lang=xx").status_code == 422
+    assert client.get(f"/vouchers/{vid}/payment-text?lang=en").json()["text"].startswith("Hello")
+    # Send, then fetch the English document of the sent ticket
+    client.put(f"/vouchers/{vid}/mark-paid", json={"method": "CASH"})
+    assert client.put(f"/vouchers/{vid}/send", json={"sent_via": "WA"}).status_code == 200
+    r = client.get(f"/vouchers/{vid}/image?lang=en")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    r = client.put(f"/vouchers/{vid}/resend", json={"sent_via": "EMAIL", "language": "en"})
+    assert r.status_code == 200
+    assert r.json()["sendings"][0]["language"] == "en"
+    assert r.json()["sendings"][0]["language_display"] == "English"
+    assert client.put(f"/vouchers/{vid}/resend", json={"sent_via": "EMAIL", "language": "xx"}).status_code == 422
+    page = client.get(f"/vouchers/{vid}/view").text
+    assert 'name="docLang"' in page
 
 
 def test_form_create_english_and_change_language(client):

@@ -257,7 +257,10 @@ def voucher_page(voucher_id: str, request: Request, db: Session = Depends(get_db
         "current_image":    current_image,
         "current_location": current_location,
         "manual_methods":   manual_methods,
+        # Payment message in both languages — the page toggle picks one
         "payment_text":     rules.payment_request_text(voucher),
+        "payment_text_he":  rules.payment_request_text(voucher, "he"),
+        "payment_text_en":  rules.payment_request_text(voucher, "en"),
     })
 
 
@@ -456,6 +459,7 @@ async def form_send_voucher(
     request:    Request,
     sent_via:   str           = Form(...),
     note:       Optional[str] = Form(None),
+    language:   Optional[str] = Form(None),   # he / en — document language (resend)
     db: Session = Depends(get_db),
 ):
     """First-send or resend depending on current voucher status."""
@@ -470,7 +474,7 @@ async def form_send_voucher(
             msg = "הכרטיס נשלח בהצלחה"
         else:
             rules.resend(db, voucher_id, sent_via, note or None,
-                         performed_by=username)
+                         performed_by=username, language=language or None)
             msg = "הכרטיס נשלח מחדש"
 
         # Refresh voucher to get cemented mobile
@@ -513,13 +517,14 @@ async def form_request_payment(
     request:    Request,
     sent_via:   str           = Form(...),
     note:       Optional[str] = Form(None),
+    language:   Optional[str] = Form(None),   # he / en — message language
     db: Session = Depends(get_db),
 ):
     """Record a payment request send (draft → awaiting_payment) and redirect back."""
     username = auth_module.get_current_user(request)
     try:
         rules.request_payment(db, voucher_id, sent_via, note or None,
-                              performed_by=username)
+                              performed_by=username, language=language or None)
         return _flash(f"/vouchers/{voucher_id}/view", "בקשת התשלום נרשמה")
     except rules.RulesError as e:
         return _flash(f"/vouchers/{voucher_id}/view", str(e), "danger")
@@ -646,7 +651,7 @@ async def form_update_notes(
     language:       Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Update receipt number, receipt date, notes, greeting and (until sent) language; redirect back."""
+    """Update receipt number, receipt date, notes, greeting and default language; redirect back."""
     try:
         rules.update_voucher_fields(
             db,

@@ -271,41 +271,45 @@ def _get_voucher(db: Session, voucher_id: str) -> Voucher:
 
 # ── Payment request (draft → awaiting_payment) ────────────────────────────────
 
-def payment_request_text(voucher: Voucher) -> str:
+def payment_request_text(voucher: Voucher, language: str | None = None) -> str:
     """
     Plain-text message sent to the customer with the payment request:
     product, price, terms and (phase B) the payment link.
-    Written in the ticket's language (Hebrew by default, English for
-    English tickets).
+    Written in `language` (he / en); None = the ticket's default language.
+    The ticket's stored terms are used when they match the requested
+    language; otherwise the settings default terms of that language.
     """
     holder_name = voucher.holder_name or (
         voucher.holder_ref.name if voucher.holder_ref else "")
-    if voucher.is_english:
-        return _payment_request_text_en(voucher, holder_name)
+    lang = _clean_language(language) if language else (voucher.language or LANG_HE)
+    terms = voucher.terms if lang == (voucher.language or LANG_HE) \
+        else settings.default_terms_for(lang)
+    if lang == LANG_EN:
+        return _payment_request_text_en(voucher, holder_name, terms)
 
     lines = [f"שלום {holder_name}," if holder_name else "שלום,",
              "",
              f"{voucher.product_title} — גלים ונפש",
              f"מחיר: {voucher.price:,.0f} ₪" if voucher.price else "",
              ""]
-    if voucher.terms:
-        lines += ["תנאים:", voucher.terms, ""]
+    if terms:
+        lines += ["תנאים:", terms, ""]
     if voucher.payment_url:
         lines += ["לתשלום מאובטח:", voucher.payment_url, ""]
     lines += ["לאחר התשלום נשלח לך את הכרטיס.", "תודה, אביגל"]
     return "\n".join(lines)
 
 
-def _payment_request_text_en(voucher: Voucher, holder_name: str) -> str:
-    """English version of the payment request message (English tickets)."""
+def _payment_request_text_en(voucher: Voucher, holder_name: str,
+                             terms: str | None) -> str:
+    """English version of the payment request message."""
     lines = [f"Hello {holder_name}," if holder_name else "Hello,",
              "",
              f"{voucher.product_title_en} — Waves & Soul",
              f"Price: {voucher.price:,.0f} ILS" if voucher.price else "",
              ""]
-    if voucher.terms:
-        # Terms come from the settings page and may still be Hebrew — sent as is
-        lines += ["Terms:", voucher.terms, ""]
+    if terms:
+        lines += ["Terms:", terms, ""]
     if voucher.payment_url:
         lines += ["Secure payment:", voucher.payment_url, ""]
     lines += ["Once the payment is received we will send you the ticket.",
@@ -315,7 +319,8 @@ def _payment_request_text_en(voucher: Voucher, holder_name: str) -> str:
 
 def request_payment(db: Session, voucher_id: str, sent_via: str,
                     note: str | None = None,
-                    performed_by: str | None = None) -> Voucher:
+                    performed_by: str | None = None,
+                    language: str | None = None) -> Voucher:
     """
     Send (or resend) the payment request for a ticket.
       - Allowed from draft (moves to awaiting_payment) or awaiting_payment
@@ -340,6 +345,7 @@ def request_payment(db: Session, voucher_id: str, sent_via: str,
         sent_at=utcnow(),
         sent_via=sent_via,
         kind="PAYMENT_LINK",
+        language=_clean_language(language) if language else (voucher.language or LANG_HE),
         note=note,
         performed_by=performed_by,
     ))
@@ -449,12 +455,13 @@ def first_send(db: Session, voucher_id: str,
     # 6. Set status
     voucher.status = STATUS_ACTIVE
 
-    # 7. Log send event
+    # 7. Log send event (first send always goes out in the default language)
     sending = Sending(
         voucher_id=voucher_id,
         sent_at=now,
         sent_via=sent_via,
         kind="TICKET",
+        language=voucher.language or LANG_HE,
         note=note,
         performed_by=performed_by,
     )
@@ -476,13 +483,14 @@ def first_send(db: Session, voucher_id: str,
 
 def resend(db: Session, voucher_id: str,
            sent_via: str, note: str | None = None,
-           performed_by: str | None = None) -> Voucher:
+           performed_by: str | None = None,
+           language: str | None = None) -> Voucher:
     """
     Resend a ticket that has already been sent:
       1. Validate state (must be active, not used)
       2. Reuse original QR (never regenerate)
-      3. Regenerate PDF (same content, fresh render)
-      4. Log new row in sendings
+      3. Regenerate the document in `language` (None = the ticket's default)
+      4. Log new row in sendings (with the language sent)
       Voucher data itself does not change.
     """
     voucher = _get_voucher(db, voucher_id)
@@ -496,13 +504,16 @@ def resend(db: Session, voucher_id: str,
         )
 
     folder = _voucher_dir(voucher)
+    lang = _clean_language(language) if language else (voucher.language or LANG_HE)
 
     # Reuse QR — do NOT call qr_module.generate_qr again
     # qr_path is already set and the file already exists
 
-    # Regenerate PDF (same QR embedded)
-    pdf_path = pdf_module.generate_pdf(voucher, folder)
-    voucher.pdf_path = str(pdf_path)
+    # Regenerate the document in the requested language (same QR embedded).
+    # voucher.pdf_path always points at the default-language document.
+    pdf_path = pdf_module.generate_pdf(voucher, folder, lang)
+    if lang == (voucher.language or LANG_HE):
+        voucher.pdf_path = str(pdf_path)
 
     # Log new send event
     sending = Sending(
@@ -510,6 +521,7 @@ def resend(db: Session, voucher_id: str,
         sent_at=utcnow(),
         sent_via=sent_via,
         kind="TICKET",
+        language=lang,
         note=note,
         performed_by=performed_by,
     )
@@ -555,11 +567,37 @@ def _regenerate_pdf(voucher: Voucher) -> None:
     """
     Re-render PDF + image of an already-sent ticket so the printed copy shows
     the treatments used so far. QR is reused; no sendings row is added.
+    The default-language document is always refreshed; the other language
+    is refreshed too when it was produced before (its file exists).
     """
     if not voucher.pdf_path:
         return
     folder = _voucher_dir(voucher)
     voucher.pdf_path = str(pdf_module.generate_pdf(voucher, folder))
+    other = LANG_EN if (voucher.language or LANG_HE) == LANG_HE else LANG_HE
+    other_pdf, _ = pdf_module.document_names(voucher, other)
+    if (folder / other_pdf).exists():
+        pdf_module.generate_pdf(voucher, folder, other)
+
+
+def ensure_document(voucher: Voucher, language: str | None = None) -> tuple[Path, Path]:
+    """
+    Return (pdf path, image path) of the ticket document in `language`,
+    rendering it first when it does not exist yet. Only for a ticket that
+    was already sent (QR exists); drafts are previewed on the fly instead.
+    The ticket's metadata and QR are untouched — only the printed text differs.
+    """
+    if not voucher.pdf_path:
+        raise RulesError(f"כרטיס {voucher.voucher_id} טרם נשלח — אין מסמך")
+    lang = _clean_language(language) if language else (voucher.language or LANG_HE)
+    folder = _voucher_dir(voucher)
+    pdf_name, img_name = pdf_module.document_names(voucher, lang)
+    pdf_path, img_path = folder / pdf_name, folder / img_name
+    if not pdf_path.exists():
+        pdf_module.generate_pdf(voucher, folder, lang)
+    elif not img_path.exists():
+        pdf_module.generate_image(pdf_path, folder, img_name)
+    return pdf_path, img_path
 
 
 def hold_entry(db: Session, voucher_id: str,
@@ -707,8 +745,8 @@ def update_voucher_fields(db: Session, voucher_id: str,
                           language: str | None = None) -> Voucher:
     """
     Update the manually-entered accounting fields on a voucher.
-    Allowed at any status except used. The language can only change while
-    the ticket was not sent yet (a sent ticket keeps its printed language).
+    Allowed at any status except used. Changing the default language of a
+    sent ticket re-renders its documents (same QR, same data).
     """
     voucher = _get_voucher(db, voucher_id)
     if voucher.is_frozen:
@@ -728,16 +766,24 @@ def update_voucher_fields(db: Session, voucher_id: str,
     if location is not None:
         # Empty string clears the per-voucher location (falls back to default).
         voucher.location = location or None
+    language_changed = False
     if language is not None and language != "":
         language = _clean_language(language)
         if language != (voucher.language or LANG_HE):
-            if voucher.is_cemented:
-                raise RulesError(
-                    f"כרטיס {voucher_id} כבר נשלח — לא ניתן לשנות את שפת הכרטיס"
-                )
             voucher.language = language
+            language_changed = True
 
     db.commit()
+    if language_changed and voucher.pdf_path:
+        # The default document changed language: drop the old files (their
+        # names no longer match) and render the default again.
+        folder = _voucher_dir(voucher)
+        for f in folder.glob("voucher*.pdf"):
+            f.unlink(missing_ok=True)
+        for f in folder.glob("voucher*.jpg"):
+            f.unlink(missing_ok=True)
+        _regenerate_pdf(voucher)
+        db.commit()
     db.refresh(voucher)
     return voucher
 

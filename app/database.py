@@ -54,6 +54,7 @@ def _migrate(target_engine=None):
         },
         "sendings": {
             "kind":           "TEXT NOT NULL DEFAULT 'TICKET'",
+            "language":       "TEXT",          # 2026-10-22 — document language sent
         },
     }
 

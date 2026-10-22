@@ -139,7 +139,7 @@ class VoucherUpdate(BaseModel):
     notes:          Optional[str] = None
     greeting:       Optional[str] = None
     location:       Optional[str] = None
-    language:       Optional[str] = None   # he / en — only until first send
+    language:       Optional[str] = None   # he / en — default document language (until used)
 
 
 class SendingOut(BaseModel):
@@ -151,6 +151,8 @@ class SendingOut(BaseModel):
     sent_via_display: str   # computed property from model
     kind: str = "TICKET"    # TICKET / PAYMENT_LINK
     kind_display: str = ""
+    language: Optional[str] = None     # he / en — document language sent
+    language_display: str = ""
     note: Optional[str]
     performed_by: Optional[str] = None  # Username who performed the action
 
@@ -254,9 +256,20 @@ class VoucherListItem(BaseModel):
 # ── Send / Resend / Use schemas ───────────────────────────────────────────────
 
 class SendRequest(BaseModel):
-    """Body for PUT /vouchers/{id}/send and /resend."""
+    """Body for PUT /vouchers/{id}/send, /resend and /request-payment."""
     sent_via: str   # WA / EMAIL / PRINT
     note: Optional[str] = None
+    language: Optional[str] = None   # he / en — document language; None = the ticket's default
+
+    @field_validator("language")
+    @classmethod
+    def language_valid(cls, v):
+        if v is None or v == "":
+            return None
+        v = v.lower()
+        if v not in VALID_LANGUAGES:
+            raise ValueError("שפת מסמך לא תקינה — he או en")
+        return v
 
     @field_validator("sent_via")
     @classmethod
