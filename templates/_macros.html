@@ -11,6 +11,8 @@
 {% macro kind_badge(v) %}
   {% if v.kind == 'PASS' %}<span class="badge-kind badge-pass">כרטיסיה</span>
   {% else %}<span class="badge-kind badge-voucher">שובר</span>{% endif %}
+  {# English ticket marker #}
+  {% if v.language == 'en' %}<span class="badge bg-secondary-subtle text-dark border small" title="כרטיס באנגלית">EN</span>{% endif %}
 {% endmacro %}
 
 {# consumed/total, plus "+held" when a reservation exists #}

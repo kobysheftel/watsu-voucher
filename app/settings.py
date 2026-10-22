@@ -15,6 +15,8 @@ _SETTINGS_PATH = Path("config/settings.json")
 
 # Built-in fallback default location (used until the user changes it).
 _DEFAULT_LOCATION = "הוד השרון"
+# Same, printed on English tickets (2026-10-22).
+_DEFAULT_LOCATION_EN = "Hod HaSharon"
 
 
 def _read() -> dict:
@@ -61,6 +63,23 @@ def set_default_location(value: str) -> None:
     _write(data)
 
 
+def get_default_location_en() -> str:
+    """Return the default location printed on English tickets."""
+    return _read().get("default_location_en") or _DEFAULT_LOCATION_EN
+
+
+def set_default_location_en(value: str) -> None:
+    """Set the default location applied to future English tickets."""
+    data = _read()
+    data["default_location_en"] = (value or "").strip() or _DEFAULT_LOCATION_EN
+    _write(data)
+
+
+def default_location_for(language: str | None) -> str:
+    """Default location in the given ticket language ('en' → English, else Hebrew)."""
+    return get_default_location_en() if language == "en" else get_default_location()
+
+
 # ── Terms text (phase A) ─────────────────────────────────────────────────────
 
 # Placeholder terms — Koby / Avigal edit the real wording on the settings page.
@@ -86,6 +105,35 @@ def set_default_terms(value: str) -> None:
     data = _read()
     data["default_terms"] = (value or "").strip()
     _write(data)
+
+
+# English wording of the same placeholder terms, for English tickets (2026-10-22).
+_DEFAULT_TERMS_EN = (
+    "Book in advance with Avigal: 050-4014696.\n"
+    "Cancel or reschedule a treatment up to 24 hours in advance.\n"
+    "Valid until the date printed on the ticket."
+)
+
+
+def get_default_terms_en() -> str:
+    """Return the default terms text copied onto every new English ticket."""
+    data = _read()
+    if "default_terms_en" not in data:
+        data["default_terms_en"] = _DEFAULT_TERMS_EN
+        _write(data)
+    return data.get("default_terms_en") or ""
+
+
+def set_default_terms_en(value: str) -> None:
+    """Set the default terms text applied to future English tickets."""
+    data = _read()
+    data["default_terms_en"] = (value or "").strip()
+    _write(data)
+
+
+def default_terms_for(language: str | None) -> str:
+    """Default terms in the given ticket language ('en' → English, else Hebrew)."""
+    return get_default_terms_en() if language == "en" else get_default_terms()
 
 
 # ── Price list (phase A) ─────────────────────────────────────────────────────

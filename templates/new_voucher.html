@@ -155,6 +155,19 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
+        <span class="field-label">שפת הכרטיס</span>
+        <span class="field-value">
+          <div class="btn-group" role="group" aria-label="שפת הכרטיס">
+            <input type="radio" class="btn-check" name="language" id="langHe" value="he" checked onchange="languageChanged()">
+            <label class="btn btn-outline-primary btn-sm" for="langHe">עברית</label>
+            <input type="radio" class="btn-check" name="language" id="langEn" value="en" onchange="languageChanged()">
+            <label class="btn btn-outline-primary btn-sm" for="langEn">English</label>
+          </div>
+          <div class="form-text small">הכרטיס והודעת התשלום יופקו בשפה שנבחרה</div>
+        </span>
+      </div>
+
+      <div class="field-row">
         <span class="field-label"><label for="entriesTotal">טיפולים *</label></span>
         <span class="field-value d-flex gap-2 align-items-center">
           <input type="number" id="entriesTotal" name="entries_total" class="form-control"
@@ -429,6 +442,20 @@ document.getElementById('voucherForm').addEventListener('submit', function(e) {
     document.getElementById('formNewEmail').value = document.getElementById('newEmail').value.trim();
   }
 });
+
+// Ticket language: swap the location and terms fields between the Hebrew /
+// English defaults, unless the user already typed a value of their own.
+var LOCATION_DEFAULTS = { he: {{ default_location|tojson }}, en: {{ default_location_en|tojson }} };
+var TERMS_DEFAULTS    = { he: {{ default_terms|tojson }},    en: {{ default_terms_en|tojson }} };
+function swapDefault(el, defaults, lang) {
+  var other = lang === 'en' ? defaults.he : defaults.en;
+  if (el.value.trim() === '' || el.value.trim() === other.trim()) el.value = defaults[lang];
+}
+function languageChanged() {
+  var lang = document.getElementById('langEn').checked ? 'en' : 'he';
+  swapDefault(document.getElementById('location'), LOCATION_DEFAULTS, lang);
+  swapDefault(document.getElementById('terms'), TERMS_DEFAULTS, lang);
+}
 
 // Initial state: kind labels + price, and an orderer prefilled from ?mobile=
 kindChanged();

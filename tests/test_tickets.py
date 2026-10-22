@@ -523,3 +523,106 @@ def test_settings_form_round_trip(client, tmp_path, monkeypatch):
     assert _settings.get_default_terms() == "תנאים לבדיקה"
     r = client.get("/vouchers/new/view")
     assert "תנאים לבדיקה" in r.text
+
+
+# ── English tickets (2026-10-22) ──────────────────────────────────────────────
+
+def _has_hebrew(text: str) -> bool:
+    return any("\u0590" <= ch <= "\u05ff" for ch in text)
+
+
+def test_create_english_voucher(db):
+    """language is stored, defaults to Hebrew, and drives the English product title."""
+    _holder(db)
+    he = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
+    en = rules.create_voucher(db, MOBILE, "זוגי", FUTURE, language="en",
+                              kind="PASS", entries_total=5, price=1000)
+    assert he.language == "he" and he.is_english is False
+    assert en.language == "en" and en.is_english is True
+    assert en.product_title_en == "Pass for 5 Watsu treatments for two"
+    assert he.product_title_en == "Gift voucher for a Watsu treatment for one"
+
+
+def test_language_invalid(db):
+    _holder(db)
+    with pytest.raises(rules.RulesError):
+        rules.create_voucher(db, MOBILE, "יחיד", FUTURE, language="fr")
+
+
+def test_payment_text_english(db):
+    """An English ticket gets an English payment request message."""
+    _holder(db)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE, language="en", price=450)
+    text = rules.payment_request_text(v)
+    assert text.startswith("Hello שרה כהן,")
+    assert "Gift voucher for a Watsu treatment for one" in text
+    assert "Price: 450 ILS" in text
+    assert "Avigal" in text
+    assert "שלום" not in text
+    # English default terms were copied onto the ticket at creation
+    assert "Terms:" in text
+    assert "Book in advance with Avigal" in text
+
+
+def test_language_editable_until_sent(db):
+    _holder(db)
+    v = rules.create_voucher(db, MOBILE, "יחיד", FUTURE)
+    v = rules.update_voucher_fields(db, v.voucher_id, language="en")
+    assert v.language == "en"
+    rules.first_send(db, v.voucher_id, "WA")
+    with pytest.raises(rules.RulesError):
+        rules.update_voucher_fields(db, v.voucher_id, language="he")
+    # Re-saving the same language after send is a no-op, not an error
+    v = rules.update_voucher_fields(db, v.voucher_id, language="en")
+    assert v.language == "en"
+
+
+def test_english_pdf_text(db):
+    """The printed English ticket contains the English strings and no Hebrew text."""
+    import fitz
+    from pathlib import Path
+    _holder(db)
+    v = rules.create_voucher(db, MOBILE, "זוגי", FUTURE, language="en",
+                             kind="PASS", entries_total=3, price=900)
+    rules.mark_paid(db, v.voucher_id, "CASH")
+    v = rules.first_send(db, v.voucher_id, "WA")
+    text = "".join(p.get_text() for p in fitz.open(str(Path(v.pdf_path))))
+    assert "Pass — Waves & Soul" in text
+    assert "3 Watsu treatments for two" in text
+    assert "Pass valid until:" in text
+    assert "Avigal: 050-4014696" in text
+    # The holder name is Hebrew; the header is an image — nothing else may be Hebrew
+    assert not _has_hebrew(text.replace("שרה כהן", ""))
+
+
+def test_api_create_english(client):
+    """POST /vouchers accepts language and returns it."""
+    client.post("/holders", json={"mobile": "0529999999", "name": "John Doe"})
+    r = client.post("/vouchers", json={
+        "mobile": "0529999999", "voucher_type": "יחיד",
+        "valid_until": FUTURE.isoformat(), "language": "en",
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["language"] == "en"
+    assert r.json()["language_display"] == "English"
+    bad = client.post("/vouchers", json={
+        "mobile": "0529999999", "voucher_type": "יחיד",
+        "valid_until": FUTURE.isoformat(), "language": "xx",
+    })
+    assert bad.status_code == 422
+
+
+def test_form_create_english_and_change_language(client):
+    """The HTML form creates an English ticket; the ticket page can switch it back while draft."""
+    client.post("/holders", json={"mobile": MOBILE, "name": "שרה כהן"})
+    r = client.post("/form/vouchers/new-full", data={
+        "mobile": MOBILE, "voucher_type": "זוגי", "valid_until": str(FUTURE),
+        "kind": "VOUCHER", "entries_total": "1", "language": "en",
+    }, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    vid = r.headers["location"].split("/vouchers/")[1].split("/")[0]
+    assert client.get(f"/vouchers/{vid}").json()["language"] == "en"
+    page = client.get(f"/vouchers/{vid}/view").text
+    assert 'name="language"' in page           # editable select while draft
+    client.post(f"/form/vouchers/{vid}/notes", data={"language": "he"}, follow_redirects=False)
+    assert client.get(f"/vouchers/{vid}").json()["language"] == "he"

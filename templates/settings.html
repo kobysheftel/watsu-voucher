@@ -75,6 +75,8 @@
         הטקסט נשלח ללקוח עם בקשת התשלום. שינוי כאן לא משפיע על כרטיסים שכבר נוצרו.
       </label>
       <textarea id="defaultTerms" name="default_terms" class="form-control" rows="5">{{ default_terms }}</textarea>
+      <label for="defaultTermsEn" class="form-label small mt-2 mb-1">לכרטיסים באנגלית</label>
+      <textarea id="defaultTermsEn" name="default_terms_en" class="form-control" rows="4" dir="ltr">{{ default_terms_en }}</textarea>
     </div>
   </div>
 
@@ -85,6 +87,9 @@
       <label for="defaultLocation" class="visually-hidden">מיקום</label>
       <input id="defaultLocation" type="text" name="default_location" class="form-control"
              value="{{ default_location }}"/>
+      <label for="defaultLocationEn" class="form-label small mt-2 mb-1">לכרטיסים באנגלית</label>
+      <input id="defaultLocationEn" type="text" name="default_location_en" class="form-control" dir="ltr"
+             value="{{ default_location_en }}" placeholder="Hod HaSharon"/>
     </div>
   </div>
 

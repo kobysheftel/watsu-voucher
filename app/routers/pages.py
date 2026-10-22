@@ -154,8 +154,10 @@ def new_voucher_page(request: Request, db: Session = Depends(get_db),
         "today":          date.today().isoformat(),
         "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
         "default_location": settings.get_default_location(),
+        "default_location_en": settings.get_default_location_en(),
         "price_list_json": json.dumps(settings.get_price_list(), ensure_ascii=False),
         "default_terms":  settings.get_default_terms(),
+        "default_terms_en": settings.get_default_terms_en(),
     })
 
 
@@ -163,19 +165,23 @@ def new_voucher_page(request: Request, db: Session = Depends(get_db),
 
 @router.get("/settings/view", response_class=HTMLResponse)
 def settings_page(request: Request):
-    """Price list, default terms and default location."""
+    """Price list, default terms and default locations (Hebrew / English tickets)."""
     return templates.TemplateResponse("settings.html", {
         "request":          request,
         "price_list":       settings.get_price_list(),
         "default_terms":    settings.get_default_terms(),
+        "default_terms_en": settings.get_default_terms_en(),
         "default_location": settings.get_default_location(),
+        "default_location_en": settings.get_default_location_en(),
     })
 
 
 @router.post("/form/settings")
 async def form_save_settings(
     default_terms:    str = Form(""),
+    default_terms_en: str = Form(""),
     default_location: str = Form(""),
+    default_location_en: str = Form(""),
     pl_kind:    List[str] = Form([]),
     pl_type:    List[str] = Form([]),
     pl_entries: List[str] = Form([]),
@@ -190,8 +196,11 @@ async def form_save_settings(
             rows.append({"kind": k, "voucher_type": t, "entries": n, "price": p})
         settings.set_price_list(rows)
         settings.set_default_terms(default_terms)
+        settings.set_default_terms_en(default_terms_en)
         if default_location.strip():
             settings.set_default_location(default_location)
+        if default_location_en.strip():
+            settings.set_default_location_en(default_location_en)
         return _flash("/settings/view", "ההגדרות נשמרו")
     except ValueError as e:
         return _flash("/settings/view", str(e), "danger")
@@ -232,8 +241,8 @@ def voucher_page(voucher_id: str, request: Request, db: Session = Depends(get_db
     gallery = images.list_images()
     current_image = voucher.image_file or images.get_default()
 
-    # Location: current value (per-voucher override or default).
-    current_location = voucher.location or settings.get_default_location()
+    # Location: current value (per-voucher override or default in the ticket's language).
+    current_location = voucher.location or settings.default_location_for(voucher.language)
 
     # Manual payment methods offered in the "mark paid" form (no GI / FREE / legacy)
     manual_methods = {k: v for k, v in PAYMENT_METHODS.items()
@@ -391,6 +400,7 @@ async def form_create_voucher_full(
     location:       Optional[str] = Form(None),
     kind:           str           = Form("VOUCHER"),
     entries_total:  str           = Form("1"),
+    language:       str           = Form("he"),
     list_price:     Optional[str] = Form(None),
     discount:       Optional[str] = Form(None),
     price:          Optional[str] = Form(None),
@@ -429,6 +439,7 @@ async def form_create_voucher_full(
             discount       = discount or None,
             price          = price or None,
             terms          = (terms if terms is not None and terms.strip() else None),
+            language       = language,
         )
         return _flash(f"/vouchers/{v.voucher_id}/view", "הכרטיס נוצר בהצלחה")
     except rules.RulesError as e:
@@ -632,9 +643,10 @@ async def form_update_notes(
     receipt_date:   Optional[str] = Form(None),
     notes:          Optional[str] = Form(None),
     greeting:       Optional[str] = Form(None),
+    language:       Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Update receipt number, receipt date, notes, and greeting; redirect back."""
+    """Update receipt number, receipt date, notes, greeting and (until sent) language; redirect back."""
     try:
         rules.update_voucher_fields(
             db,
@@ -643,6 +655,7 @@ async def form_update_notes(
             receipt_date   = date.fromisoformat(receipt_date) if receipt_date else None,
             notes          = notes or None,
             greeting       = greeting if greeting is not None else None,
+            language       = language or None,
         )
         return _flash(f"/vouchers/{voucher_id}/view", "נשמר בהצלחה")
     except rules.RulesError as e:

@@ -26,6 +26,7 @@ from app.models import (
     KIND_VOUCHER, KIND_PASS, VALID_KINDS,
     STATUS_DRAFT, STATUS_AWAITING, STATUS_PAID, STATUS_ACTIVE, STATUS_USED,
     ENTRY_HELD, ENTRY_CONSUMED, ENTRY_CANCELLED, PAYMENT_METHODS,
+    LANG_HE, LANG_EN, VALID_LANGUAGES,
 )
 from app import qr_module, pdf_module, images, settings, mailer
 
@@ -127,6 +128,14 @@ def next_sequence(db: Session, mobile: str) -> int:
     return (max_seq[0] + 1) if max_seq else 1
 
 
+def _clean_language(value) -> str:
+    """Normalise a ticket language value: None / '' → 'he'; anything else must be he/en."""
+    lang = (value or LANG_HE).strip().lower()
+    if lang not in VALID_LANGUAGES:
+        raise RulesError(f"שפת כרטיס לא תקינה: {value}")
+    return lang
+
+
 def _clean_money(value, label: str) -> float | None:
     """Validate an optional money amount (None / '' → None, negative → error)."""
     if value is None or value == "":
@@ -150,11 +159,14 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
                    kind: str = KIND_VOUCHER,
                    entries_total: int = 1,
                    list_price=None, discount=None, price=None,
-                   terms: str | None = None) -> Voucher:
+                   terms: str | None = None,
+                   language: str | None = None) -> Voucher:
     """
     Create a new draft ticket for an existing holder.
 
     - kind: VOUCHER (gift) or PASS (self use); both may have many entries.
+    - language: he (default) or en — the printed ticket and the payment
+      message are produced in that language.
     - list_price / discount / price: if price is not given it is computed as
       list_price - discount (when a list price is known). None = free ticket.
     - terms: copied from the settings default when not given, so later edits
@@ -177,6 +189,8 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
     if entries_total < 1 or entries_total > 100:
         raise RulesError("כמות טיפולים חייבת להיות בין 1 ל-100")
 
+    language = _clean_language(language)
+
     list_price = _clean_money(list_price, "מחיר מחירון")
     discount   = _clean_money(discount, "הנחה")
     price      = _clean_money(price, "מחיר")
@@ -184,7 +198,8 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
         price = max(list_price - (discount or 0), 0)
 
     if terms is None:
-        terms = settings.get_default_terms() or None
+        # Default terms in the ticket's language (settings page)
+        terms = settings.default_terms_for(language) or None
 
     seq = next_sequence(db, mobile)
     voucher_id = f"{mobile}-{seq:03d}"
@@ -195,6 +210,7 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
         sequence=seq,
         kind=kind,
         entries_total=entries_total,
+        language=language,
         voucher_type=voucher_type,
         valid_until=valid_until,
         issued_at=utcnow(),
@@ -259,9 +275,14 @@ def payment_request_text(voucher: Voucher) -> str:
     """
     Plain-text message sent to the customer with the payment request:
     product, price, terms and (phase B) the payment link.
+    Written in the ticket's language (Hebrew by default, English for
+    English tickets).
     """
     holder_name = voucher.holder_name or (
         voucher.holder_ref.name if voucher.holder_ref else "")
+    if voucher.is_english:
+        return _payment_request_text_en(voucher, holder_name)
+
     lines = [f"שלום {holder_name}," if holder_name else "שלום,",
              "",
              f"{voucher.product_title} — גלים ונפש",
@@ -272,6 +293,23 @@ def payment_request_text(voucher: Voucher) -> str:
     if voucher.payment_url:
         lines += ["לתשלום מאובטח:", voucher.payment_url, ""]
     lines += ["לאחר התשלום נשלח לך את הכרטיס.", "תודה, אביגל"]
+    return "\n".join(lines)
+
+
+def _payment_request_text_en(voucher: Voucher, holder_name: str) -> str:
+    """English version of the payment request message (English tickets)."""
+    lines = [f"Hello {holder_name}," if holder_name else "Hello,",
+             "",
+             f"{voucher.product_title_en} — Waves & Soul",
+             f"Price: {voucher.price:,.0f} ILS" if voucher.price else "",
+             ""]
+    if voucher.terms:
+        # Terms come from the settings page and may still be Hebrew — sent as is
+        lines += ["Terms:", voucher.terms, ""]
+    if voucher.payment_url:
+        lines += ["Secure payment:", voucher.payment_url, ""]
+    lines += ["Once the payment is received we will send you the ticket.",
+              "Thank you, Avigal"]
     return "\n".join(lines)
 
 
@@ -395,9 +433,10 @@ def first_send(db: Session, voucher_id: str,
     if not voucher.image_file:
         voucher.image_file = images.get_default()
 
-    # Freeze the location the same way (cement current default if unset).
+    # Freeze the location the same way (cement the current default, in the
+    # ticket's language, if unset).
     if not voucher.location:
-        voucher.location = settings.get_default_location()
+        voucher.location = settings.default_location_for(voucher.language)
 
     # 4. Generate QR — saved to qr.png, path stored on voucher
     qr_path = qr_module.generate_qr(voucher, folder)
@@ -664,10 +703,12 @@ def update_voucher_fields(db: Session, voucher_id: str,
                           receipt_date: date | None = None,
                           notes: str | None = None,
                           greeting: str | None = None,
-                          location: str | None = None) -> Voucher:
+                          location: str | None = None,
+                          language: str | None = None) -> Voucher:
     """
     Update the manually-entered accounting fields on a voucher.
-    Allowed at any status except used.
+    Allowed at any status except used. The language can only change while
+    the ticket was not sent yet (a sent ticket keeps its printed language).
     """
     voucher = _get_voucher(db, voucher_id)
     if voucher.is_frozen:
@@ -687,6 +728,14 @@ def update_voucher_fields(db: Session, voucher_id: str,
     if location is not None:
         # Empty string clears the per-voucher location (falls back to default).
         voucher.location = location or None
+    if language is not None and language != "":
+        language = _clean_language(language)
+        if language != (voucher.language or LANG_HE):
+            if voucher.is_cemented:
+                raise RulesError(
+                    f"כרטיס {voucher_id} כבר נשלח — לא ניתן לשנות את שפת הכרטיס"
+                )
+            voucher.language = language
 
     db.commit()
     db.refresh(voucher)
@@ -741,7 +790,11 @@ def set_voucher_location(db: Session, voucher_id: str, location: str,
     voucher.location = (location or "").strip() or None
 
     if make_default and voucher.location:
-        settings.set_default_location(voucher.location)
+        # The default is kept per language — an English ticket sets the English one
+        if voucher.is_english:
+            settings.set_default_location_en(voucher.location)
+        else:
+            settings.set_default_location(voucher.location)
 
     if voucher.pdf_path:
         folder = _voucher_dir(voucher)

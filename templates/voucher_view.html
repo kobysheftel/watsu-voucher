@@ -125,6 +125,22 @@ hr { margin: 8px 0; }
       </div>
 
       <div class="field-row">
+        <span class="field-label"><label for="language">שפת הכרטיס</label></span>
+        <span class="field-value">
+          {% if voucher.is_cemented %}
+            {{ voucher.language_display }}
+            <span class="text-muted small">(נקבע בשליחה)</span>
+          {% else %}
+            <select id="language" name="language" class="form-select form-select-sm"
+                    style="max-width:140px" onchange="this.form.submit()">
+              <option value="he" {% if not voucher.is_english %}selected{% endif %}>עברית</option>
+              <option value="en" {% if voucher.is_english %}selected{% endif %}>English</option>
+            </select>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="field-row">
         <span class="field-label">טיפולים</span>
         <span class="field-value">{{ entries_badge(voucher) }}
           <span class="text-muted small">(מומשו / סה״כ{% if voucher.entries_held %}, +משוריינים{% endif %})</span>

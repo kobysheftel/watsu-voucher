@@ -63,6 +63,8 @@ VALID_TYPES = {"יחיד", "זוגי"}
 
 VALID_KINDS = {"VOUCHER", "PASS"}
 
+VALID_LANGUAGES = {"he", "en"}
+
 
 class VoucherCreate(BaseModel):
     """Create a new draft ticket (gift voucher or pass)."""
@@ -71,6 +73,7 @@ class VoucherCreate(BaseModel):
     valid_until: date
     kind: str = "VOUCHER"            # VOUCHER (gift) / PASS (self use)
     entries_total: int = 1           # treatments included
+    language: str = "he"             # he (Hebrew, default) / en (English ticket)
     list_price: Optional[float] = None
     discount:   Optional[float] = None
     price:      Optional[float] = None   # None + list_price → computed
@@ -88,6 +91,14 @@ class VoucherCreate(BaseModel):
         v = (v or "VOUCHER").upper()
         if v not in VALID_KINDS:
             raise ValueError("סוג כרטיס לא תקין — VOUCHER או PASS")
+        return v
+
+    @field_validator("language")
+    @classmethod
+    def language_valid(cls, v):
+        v = (v or "he").lower()
+        if v not in VALID_LANGUAGES:
+            raise ValueError("שפת כרטיס לא תקינה — he או en")
         return v
 
     @field_validator("entries_total")
@@ -128,6 +139,7 @@ class VoucherUpdate(BaseModel):
     notes:          Optional[str] = None
     greeting:       Optional[str] = None
     location:       Optional[str] = None
+    language:       Optional[str] = None   # he / en — only until first send
 
 
 class SendingOut(BaseModel):
@@ -170,6 +182,8 @@ class VoucherOut(BaseModel):
     kind: str = "VOUCHER"
     kind_display: str = ""
     entries_total: int = 1
+    language: str = "he"
+    language_display: str = ""
     voucher_type: str
     product_title: str = ""
     valid_until: date

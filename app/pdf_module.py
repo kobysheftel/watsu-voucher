@@ -194,23 +194,27 @@ def _draw_pool_photo(c: canvas.Canvas, path: Path, width: float,
         pass
 
 
-def _draw_punch_row(c: canvas.Canvas, n: int, y: float, filled: int = 0) -> None:
+def _draw_punch_row(c: canvas.Canvas, n: int, y: float, filled: int = 0,
+                    rtl: bool = True) -> None:
     """
     Draw n small circles centred on the page at baseline y — the "punch
     card" look of a multi-treatment ticket. The first `filled` circles are
     drawn solid (treatments already used); the rest stay empty.
+    rtl=True fills from the right (Hebrew reading order); an English ticket
+    fills from the left.
     """
     r = 1.8 * mm            # circle radius
     gap = 2.2 * mm          # space between circles
     total_w = n * 2 * r + (n - 1) * gap
-    # Right-to-left: the first (used) circles sit on the right, like Hebrew reading order
-    x = (_W + total_w) / 2 - r
+    step = 2 * r + gap
+    # First (used) circle sits on the reading-start side of the row
+    x = (_W + total_w) / 2 - r if rtl else (_W - total_w) / 2 + r
     c.setStrokeColor(_BLUE)
     c.setFillColor(_BLUE)
     c.setLineWidth(0.8)
     for i in range(n):
         c.circle(x, y + r, r, stroke=1, fill=1 if i < filled else 0)
-        x -= 2 * r + gap
+        x += -step if rtl else step
 
 
 def _local_time(dt) -> str:
@@ -262,6 +266,56 @@ def _draw_consumed_lines(c: canvas.Canvas, rows: list[tuple[int, str]],
     return y
 
 
+# ── Printed text per ticket language ─────────────────────────────────────────
+# Every string printed on the ticket, keyed by language. The brand header is
+# an image and stays Hebrew in both languages (Koby, 2026-10-22).
+_STRINGS = {
+    "he": {
+        "gift_title":   "איזה כיף קיבלת שובר מתנה!",
+        "pass_title":   "כרטיסיה — גלים ונפש",
+        "type_single":  "טיפול וואטסו {type}",          # one treatment
+        "type_multi":   "{n} טיפולי וואטסו {type}",     # several treatments
+        "single":       "ליחיד",
+        "couple":       "זוגי",
+        "name":         "על שם: {name}",
+        "used":         "טיפולים שמומשו:",
+        "desc": [
+            "וואטסו במים בבריכה חמימה בחצר מקורה ושקטה.",
+            "מומלץ לבוא בבגד ים, להביא מגבות ובגדים להחלפה.",
+            "הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים.",
+        ],
+        "contact":      "למימוש ותיאום תאריך:",
+        "phone":        "אביגל: 050-4014696",
+        "valid_voucher": "השובר בתוקף עד:",
+        "valid_pass":   "הכרטיסיה בתוקף עד:",
+    },
+    "en": {
+        "gift_title":   "What a treat — you got a gift voucher!",
+        "pass_title":   "Pass — Waves & Soul",
+        "type_single":  "Watsu treatment {type}",
+        "type_multi":   "{n} Watsu treatments {type}",
+        "single":       "for one",
+        "couple":       "for two",
+        "name":         "Name: {name}",
+        "used":         "Treatments used:",
+        "desc": [
+            "Watsu in a warm pool, in a quiet covered courtyard.",
+            "Please come in a swimsuit and bring towels and a change of clothes.",
+            "The treatment lasts about 50 minutes in the warm pool water.",
+        ],
+        "contact":      "To redeem and book a date:",
+        "phone":        "Avigal: 050-4014696",
+        "valid_voucher": "Voucher valid until:",
+        "valid_pass":   "Pass valid until:",
+    },
+}
+
+
+def _ticket_lang(voucher) -> str:
+    """'en' for an English ticket, else 'he'."""
+    return "en" if getattr(voucher, "language", "he") == "en" else "he"
+
+
 def _is_couple(voucher) -> bool:
     """True for a couple voucher (current 'זוגי' or the legacy 'לזוג' value)."""
     return voucher.voucher_type in ("זוגי", "לזוג")
@@ -309,7 +363,9 @@ def generate_pdf(voucher, folder: Path) -> Path:
     # ── Gather the per-ticket facts that decide the layout ──
     is_pass = getattr(voucher, "kind", "VOUCHER") == "PASS"
     n_entries = int(getattr(voucher, "entries_total", 1) or 1)
-    type_word = "זוגי" if _is_couple(voucher) else "ליחיד"
+    lang = _ticket_lang(voucher)
+    t = _STRINGS[lang]                  # printed strings in the ticket language
+    type_word = t["couple"] if _is_couple(voucher) else t["single"]
     consumed = _consumed_entries(voucher)
     show_circles = 1 < n_entries <= 20
     greeting = (getattr(voucher, 'greeting', None) or "").strip()
@@ -323,7 +379,7 @@ def generate_pdf(voucher, folder: Path) -> Path:
                 or (voucher.holder_ref.name if getattr(voucher, "holder_ref", None) else "")
                 or "").strip()
     location = (getattr(voucher, 'location', None)
-                or settings.get_default_location() or "").strip()
+                or settings.default_location_for(lang) or "").strip()
 
     # ── Adaptive vertical layout ──
     # The QR is pinned to the bottom; everything between the photo and the
@@ -371,30 +427,26 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     # ── Title + type line (differs by kind and number of treatments) ──
     y = top(33) - photo_h - 12 * mm
-    if is_pass:
-        _draw_centered_fit(c, "כרטיסיה — גלים ונפש", y,
-                           max_size=24, color=_BLUE, font=_FONT_TITLE)
-    else:
-        _draw_centered_fit(c, "איזה כיף קיבלת שובר מתנה!", y,
-                           max_size=24, color=_BLUE, font=_FONT_TITLE)
-    type_line = (f"{n_entries} טיפולי וואטסו {type_word}" if n_entries > 1
-                 else f"טיפול וואטסו {type_word}")
+    _draw_centered_fit(c, t["pass_title"] if is_pass else t["gift_title"], y,
+                       max_size=24, color=_BLUE, font=_FONT_TITLE)
+    type_line = (t["type_multi"].format(n=n_entries, type=type_word) if n_entries > 1
+                 else t["type_single"].format(type=type_word))
     y -= 8 * mm
     _draw_centered(c, type_line, y, font=_FONT_TITLE, size=14, color=_BLUE)
     y -= 5 * mm
 
     # Pass: holder name
     if name:
-        _draw_centered(c, f"על שם: {name}", y, size=11.5, color=_BLUE)
+        _draw_centered(c, t["name"].format(name=name), y, size=11.5, color=_BLUE)
         y -= 6 * mm * g
 
     # Used treatments: filled circles + the date/time of each one, so a
     # re-sent ticket always shows what was already used (Koby, 2026-09-13).
     if show_circles:
-        _draw_punch_row(c, n_entries, y, filled=len(consumed))
+        _draw_punch_row(c, n_entries, y, filled=len(consumed), rtl=(lang == "he"))
         y -= 6 * mm * g
     if consumed:
-        _draw_centered(c, "טיפולים שמומשו:", y, size=9.5, color=_BLUE, font=_FONT_TITLE)
+        _draw_centered(c, t["used"], y, size=9.5, color=_BLUE, font=_FONT_TITLE)
         y -= 4.5 * mm * g
         y = _draw_consumed_lines(c, consumed, y, line_h=4.2 * mm * g)
         y -= 1 * mm * g
@@ -410,20 +462,15 @@ def generate_pdf(voucher, folder: Path) -> Path:
     y -= (orn_h or 6 * mm) + 8 * mm * g
 
     # ── Treatment description ──
-    desc_lines = [
-        "וואטסו במים בבריכה חמימה בחצר מקורה ושקטה.",
-        "מומלץ לבוא בבגד ים, להביא מגבות ובגדים להחלפה.",
-        "הטיפול הוא כ- 50 דק׳ במי הבריכה החמימים.",
-    ]
-    for line in desc_lines:
+    for line in t["desc"]:
         _draw_centered_fit(c, line, y, max_size=11.5 * (0.85 + 0.15 * g), color=_TEXT)
         y -= 6.5 * mm * g
 
     # ── Contact ──
     y -= 3 * mm * g
-    _draw_centered(c, "למימוש ותיאום תאריך:", y, font=_FONT_TITLE, size=12, color=_BLUE)
+    _draw_centered(c, t["contact"], y, font=_FONT_TITLE, size=12, color=_BLUE)
     y -= 6 * mm * g
-    _draw_centered(c, "אביגל: 050-4014696", y, size=12, color=_BLUE)
+    _draw_centered(c, t["phone"], y, size=12, color=_BLUE)
     y -= 5 * mm * g
 
     # Location / venue (per-voucher override or default), small grey line
@@ -433,7 +480,7 @@ def generate_pdf(voucher, folder: Path) -> Path:
 
     # ── Validity ──
     y -= 3 * mm * g
-    validity_label = "הכרטיסיה בתוקף עד:" if is_pass else "השובר בתוקף עד:"
+    validity_label = t["valid_pass"] if is_pass else t["valid_voucher"]
     _draw_centered(c, validity_label, y, font=_FONT_TITLE, size=12, color=_BLUE)
     y -= 6 * mm * g
     _draw_centered(c, voucher.valid_until.strftime('%d/%m/%Y'), max(y, min_y), size=12, color=_BLUE)

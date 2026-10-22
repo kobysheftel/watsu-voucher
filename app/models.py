@@ -58,6 +58,16 @@ STATUS_DISPLAY = {
     STATUS_USED:     "מומש",
 }
 
+# Ticket language — the language the printed ticket (PDF / image) and the
+# customer-facing payment message are written in. The admin UI stays Hebrew.
+LANG_HE = "he"
+LANG_EN = "en"
+VALID_LANGUAGES = {LANG_HE, LANG_EN}
+LANGUAGE_DISPLAY = {
+    LANG_HE: "עברית",
+    LANG_EN: "English",
+}
+
 # Entry status values
 ENTRY_HELD      = "held"
 ENTRY_CONSUMED  = "consumed"
@@ -145,6 +155,10 @@ class Voucher(Base):
 
     # Voucher content
     voucher_type    = Column(Text, nullable=False)   # יחיד / זוגי
+
+    # Language of the printed ticket and the payment message: he (default) / en.
+    # Editable while the ticket is a draft / awaiting / paid; frozen on first send.
+    language        = Column(Text, nullable=False, default=LANG_HE)
     valid_until     = Column(Date, nullable=False)
 
     # Timestamps
@@ -244,6 +258,15 @@ class Voucher(Base):
         return KIND_DISPLAY.get(self.kind, self.kind)
 
     @property
+    def is_english(self):
+        """True when the ticket is printed in English."""
+        return (self.language or LANG_HE) == LANG_EN
+
+    @property
+    def language_display(self):
+        return LANGUAGE_DISPLAY.get(self.language or LANG_HE, self.language)
+
+    @property
     def status_display(self):
         return STATUS_DISPLAY.get(self.status, self.status)
 
@@ -287,6 +310,21 @@ class Voucher(Base):
         if n == 1:
             return f"{head} לטיפול וואטסו {type_word}"
         return f"{head} ל-{n} טיפולי וואטסו {type_word}"
+
+    @property
+    def product_title_en(self) -> str:
+        """
+        English product description — used on English tickets and in the
+        English payment message. e.g. "Gift voucher for a Watsu treatment
+        for two", "Pass for 5 Watsu treatments for one".
+        """
+        couple = self.voucher_type in ("זוגי", "לזוג")
+        type_word = "for two" if couple else "for one"
+        n = self.entries_total or 1
+        head = "Pass" if self.is_pass else "Gift voucher"
+        if n == 1:
+            return f"{head} for a Watsu treatment {type_word}"
+        return f"{head} for {n} Watsu treatments {type_word}"
 
     @property
     def entries_badge(self) -> str:

@@ -49,6 +49,8 @@ def _migrate(target_engine=None):
             "payment_url":    "TEXT",
             "gi_document_id": "TEXT",
             "paid_at":        "DATETIME",
+            # 2026-10-22 — English tickets
+            "language":       "TEXT NOT NULL DEFAULT 'he'",
         },
         "sendings": {
             "kind":           "TEXT NOT NULL DEFAULT 'TICKET'",

@@ -7,7 +7,8 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 ## Status
 - V1 complete and deployed to production; phase 2 started 2026-09-09 (new voucher design)
 - **V2 phase A (tickets + entries + manual payment) implemented locally 2026-09-13 — NOT yet deployed.** Design: `docs/DESIGN-V2-TICKETS.md`
-- 83 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 30 in tests/test_tickets.py
+- **English tickets added locally 2026-10-22 — NOT yet deployed** (per-ticket `language` he/en; see session notes below)
+- 90 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 37 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py). Avigal PIN changed 2026-10-10 (value in app/auth.py; local + production auth.json both rehashed; `init_auth` only seeds when auth.json is missing, so a PIN change always needs the out-of-band rehash on the server)
 - PWA installable on smartphones
@@ -53,9 +54,9 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | rules.py | Business rules engine: create, request_payment, mark_paid, first_send (send ticket), resend, hold_entry / consume_entry / cancel_hold / consume_direct, mark_used (legacy = consume one), set_price, holder lock (any consumed entry) |
 | utils.py | Utility functions (utcnow) |
 | qr_module.py | QR code generation with Fernet encryption |
-| pdf_module.py | PDF + JPEG generation via reportlab + bidi + PyMuPDF. 2026-09 design: watercolor bg, brand header image, oval photo, QR + voucher ID at bottom. `render_preview()` = on-the-fly draft render |
+| pdf_module.py | PDF + JPEG generation via reportlab + bidi + PyMuPDF. `_STRINGS` = printed text per ticket language (he/en). 2026-09 design: watercolor bg, brand header image, oval photo, QR + voucher ID at bottom. `render_preview()` = on-the-fly draft render |
 | images.py | Voucher image library (assets/voucher_images + library.json): default + history, upload/validate |
-| settings.py | config/settings.json — default location, notify_email, default_terms, price_list (kind × יחיד/זוגי × entries → price) |
+| settings.py | config/settings.json — default location (+ default_location_en), notify_email, default_terms (+ default_terms_en), price_list (kind × יחיד/זוגי × entries → price) |
 | database.py | engine + `_migrate()`: adds missing columns, `sent`→`active`, legacy paid rows, back-fills one consumed entry per used ticket (idempotent, runs on every startup) |
 
 ### app/routers/
@@ -127,6 +128,15 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | secret.key | Fernet encryption key for QR codes |
 | auth.json | PIN hashes + WebAuthn credentials (per user) |
 | settings.json | Default voucher location |
+
+## What Was Done This Session (2026-10-22) — English tickets
+- Koby: "allow english vouchers" — keep the Hebrew brand header image, English payment message too.
+- New column `vouchers.language` ('he' default / 'en'), added by `database._migrate()` on startup (no manual ALTER needed on the server). Chosen on the new-ticket form (עברית / English toggle), editable on the ticket page while draft/awaiting/paid, frozen on first send (`rules.update_voucher_fields` raises after cement). "EN" marker next to the kind badge in lists.
+- `pdf_module._STRINGS` holds every printed string per language; punch circles fill left-to-right on English tickets; header image stays Hebrew. `Voucher.product_title_en`, `is_english`, `language_display` added.
+- `rules.payment_request_text` → English message for English tickets (greeting, product, "Price: N ILS", terms, closing).
+- Settings gained English defaults: `default_location_en` ("Hod HaSharon") and `default_terms_en`, editable on /settings/view; `settings.default_location_for()` / `default_terms_for()` pick by language. New-ticket form swaps location + terms to the language default when the language toggle changes (unless the user typed their own). "Make permanent" location on an English ticket updates the English default.
+- Visual check done: English voucher (greeting), English 10-entry pass with 3 used, Hebrew voucher unchanged. Admin UI stays Hebrew; notification e-mail to Koby stays Hebrew.
+- Not pushed (push = deploy of unreleased V2 phase A + this).
 
 ## What Was Done This Session (2026-10-10) — Avigal PIN change
 - Avigal's PIN changed (new value = seed in `app/auth.py`, `tests/test_api.py` updated, local `config/auth.json` rehashed (commit 0e0d091, NOT pushed — pushing would deploy the unreleased V2 phase A code).

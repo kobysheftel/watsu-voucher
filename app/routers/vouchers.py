@@ -70,6 +70,7 @@ def create_voucher(body: VoucherCreate, db: Session = Depends(get_db)):
             discount=body.discount,
             price=body.price,
             terms=body.terms,
+            language=body.language,
         )
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -145,6 +146,7 @@ def update_voucher(voucher_id: str, body: VoucherUpdate,
             notes=body.notes,
             greeting=body.greeting,
             location=body.location,
+            language=body.language,
         )
     except rules.RulesError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
