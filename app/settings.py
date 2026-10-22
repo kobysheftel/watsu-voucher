@@ -75,6 +75,28 @@ def set_default_location_en(value: str) -> None:
     _write(data)
 
 
+# ── Default ticket language (2026-10-22) ─────────────────────────────────────
+
+_DEFAULT_LANGUAGE = "he"
+
+
+def get_default_language() -> str:
+    """Language new tickets start in ('he' / 'en'); Hebrew until changed on the settings page."""
+    data = _read()
+    if "default_language" not in data:
+        data["default_language"] = _DEFAULT_LANGUAGE
+        _write(data)
+    lang = (data.get("default_language") or _DEFAULT_LANGUAGE).lower()
+    return "en" if lang == "en" else "he"
+
+
+def set_default_language(value: str) -> None:
+    """Set the language new tickets start in. Anything but 'en' means Hebrew."""
+    data = _read()
+    data["default_language"] = "en" if (value or "").strip().lower() == "en" else "he"
+    _write(data)
+
+
 def default_location_for(language: str | None) -> str:
     """Default location in the given ticket language ('en' → English, else Hebrew)."""
     return get_default_location_en() if language == "en" else get_default_location()

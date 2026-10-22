@@ -129,8 +129,11 @@ def next_sequence(db: Session, mobile: str) -> int:
 
 
 def _clean_language(value) -> str:
-    """Normalise a ticket language value: None / '' → 'he'; anything else must be he/en."""
-    lang = (value or LANG_HE).strip().lower()
+    """
+    Normalise a ticket language value: None / '' → the system default from the
+    settings page (Hebrew until changed); anything else must be he/en.
+    """
+    lang = (value or settings.get_default_language()).strip().lower()
     if lang not in VALID_LANGUAGES:
         raise RulesError(f"שפת כרטיס לא תקינה: {value}")
     return lang
@@ -165,8 +168,8 @@ def create_voucher(db: Session, mobile: str, voucher_type: str,
     Create a new draft ticket for an existing holder.
 
     - kind: VOUCHER (gift) or PASS (self use); both may have many entries.
-    - language: he (default) or en — the printed ticket and the payment
-      message are produced in that language.
+    - language: he or en — the default language of the printed ticket and the
+      payment message. None = the system default (settings page).
     - list_price / discount / price: if price is not given it is computed as
       list_price - discount (when a list price is known). None = free ticket.
     - terms: copied from the settings default when not given, so later edits

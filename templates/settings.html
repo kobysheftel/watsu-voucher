@@ -67,6 +67,22 @@
     </div>
   </div>
 
+  <!-- Default ticket language -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-bold">שפת כרטיס (ברירת מחדל לכרטיסים חדשים)</div>
+    <div class="card-body">
+      <div class="btn-group" role="group" aria-label="שפת כרטיס ברירת מחדל">
+        <input type="radio" class="btn-check" name="default_language" id="defLangHe" value="he"
+               {% if default_language != 'en' %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="defLangHe">עברית</label>
+        <input type="radio" class="btn-check" name="default_language" id="defLangEn" value="en"
+               {% if default_language == 'en' %}checked{% endif %}>
+        <label class="btn btn-outline-primary" for="defLangEn">English</label>
+      </div>
+      <div class="form-text small">כרטיס חדש מתחיל בשפה זו. ניתן לשנות לכל כרטיס, וגם להפיק כל כרטיס בשפה השנייה.</div>
+    </div>
+  </div>
+
   <!-- Default terms -->
   <div class="card shadow-sm mb-3">
     <div class="card-header fw-bold">תנאים (ברירת מחדל לכרטיסים חדשים)</div>

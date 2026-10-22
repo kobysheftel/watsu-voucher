@@ -525,6 +525,33 @@ def test_settings_form_round_trip(client, tmp_path, monkeypatch):
     assert "תנאים לבדיקה" in r.text
 
 
+def test_default_language_setting(client, tmp_path, monkeypatch):
+    """The settings-page default language drives new tickets (form + API) until changed."""
+    from app import settings as _settings
+    monkeypatch.setattr(_settings, "_SETTINGS_PATH", tmp_path / "settings.json")
+    assert _settings.get_default_language() == "he"
+    client.post("/holders", json={"mobile": MOBILE, "name": "שרה כהן"})
+    r = client.post("/form/settings", data={"default_language": "en"}, follow_redirects=False)
+    assert r.status_code == 303 and "danger" not in r.headers["location"]
+    assert _settings.get_default_language() == "en"
+    # New-ticket page starts on English with the English location default
+    page = client.get("/vouchers/new/view").text
+    assert 'id="langEn" value="en"\n                   checked' in page
+    assert 'value="Hod HaSharon"' in page
+    # API without language → system default; explicit value still wins
+    r = client.post("/vouchers", json={"mobile": MOBILE, "voucher_type": "יחיד",
+                                       "valid_until": str(FUTURE)})
+    assert r.json()["language"] == "en"
+    r = client.post("/vouchers", json={"mobile": MOBILE, "voucher_type": "יחיד",
+                                       "valid_until": str(FUTURE), "language": "he"})
+    assert r.json()["language"] == "he"
+    # Back to Hebrew: next ticket is Hebrew again
+    client.post("/form/settings", data={"default_language": "he"}, follow_redirects=False)
+    r = client.post("/vouchers", json={"mobile": MOBILE, "voucher_type": "יחיד",
+                                       "valid_until": str(FUTURE)})
+    assert r.json()["language"] == "he"
+
+
 # ── English tickets (2026-10-22) ──────────────────────────────────────────────
 
 def _has_hebrew(text: str) -> bool:

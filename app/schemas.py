@@ -73,7 +73,7 @@ class VoucherCreate(BaseModel):
     valid_until: date
     kind: str = "VOUCHER"            # VOUCHER (gift) / PASS (self use)
     entries_total: int = 1           # treatments included
-    language: str = "he"             # he (Hebrew, default) / en (English ticket)
+    language: Optional[str] = None   # he / en; None = the system default (settings)
     list_price: Optional[float] = None
     discount:   Optional[float] = None
     price:      Optional[float] = None   # None + list_price → computed
@@ -96,7 +96,9 @@ class VoucherCreate(BaseModel):
     @field_validator("language")
     @classmethod
     def language_valid(cls, v):
-        v = (v or "he").lower()
+        if v is None or v == "":
+            return None                      # rules fill in the system default
+        v = v.lower()
         if v not in VALID_LANGUAGES:
             raise ValueError("שפת כרטיס לא תקינה — he או en")
         return v

@@ -158,9 +158,11 @@ hr { margin: 8px 0; }
         <span class="field-label">שפת הכרטיס</span>
         <span class="field-value">
           <div class="btn-group" role="group" aria-label="שפת הכרטיס">
-            <input type="radio" class="btn-check" name="language" id="langHe" value="he" checked onchange="languageChanged()">
+            <input type="radio" class="btn-check" name="language" id="langHe" value="he"
+                   {% if default_language != 'en' %}checked{% endif %} onchange="languageChanged()">
             <label class="btn btn-outline-primary btn-sm" for="langHe">עברית</label>
-            <input type="radio" class="btn-check" name="language" id="langEn" value="en" onchange="languageChanged()">
+            <input type="radio" class="btn-check" name="language" id="langEn" value="en"
+                   {% if default_language == 'en' %}checked{% endif %} onchange="languageChanged()">
             <label class="btn btn-outline-primary btn-sm" for="langEn">English</label>
           </div>
           <div class="form-text small">הכרטיס והודעת התשלום יופקו בשפה שנבחרה</div>
@@ -236,7 +238,7 @@ hr { margin: 8px 0; }
         <span class="field-label"><label for="location">מיקום</label></span>
         <span class="field-value">
           <input type="text" id="location" name="location" class="form-control"
-                 value="{{ default_location }}"
+                 value="{{ default_location_en if default_language == 'en' else default_location }}"
                  placeholder="מיקום הטיפול"/>
           <div class="form-text small">ברירת מחדל — ניתן לשנות לכרטיס זה</div>
         </span>
@@ -253,7 +255,7 @@ hr { margin: 8px 0; }
       <div class="field-row">
         <span class="field-label"><label for="terms">תנאים</label></span>
         <span class="field-value">
-          <textarea id="terms" name="terms" class="form-control" rows="3">{{ default_terms }}</textarea>
+          <textarea id="terms" name="terms" class="form-control" rows="3">{{ default_terms_en if default_language == 'en' else default_terms }}</textarea>
           <div class="form-text small">נשלח ללקוח עם בקשת התשלום</div>
         </span>
       </div>

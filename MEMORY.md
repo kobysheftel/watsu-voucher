@@ -9,7 +9,8 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - V2 phase A (tickets + entries + manual payment) implemented 2026-09-13, deployed 2026-10-22. Design: `docs/DESIGN-V2-TICKETS.md`
 - **V2 phase A + English tickets DEPLOYED to production 2026-10-22 11:50** (commit 425a7a6; pre-deploy backups on server: `vouchers.db.bak-20261022-*`, `config/settings.json.bak-20261022-*`). Migration verified: 3 active tickets, `language` column present.
 - **Bilingual documents deployed 2026-10-22 (second deploy of the day)**: `language` = default document language (he unless set), editable until used; the other language is produced on demand (`voucher.<lang>.pdf/.jpg`, same QR); `sendings.language` logged; ticket page has a document-language toggle.
-- 93 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 40 in tests/test_tickets.py
+- System default ticket language on /settings/view (`default_language`, deployed 2026-10-22, third deploy): new tickets start in it; explicit per-ticket choice still wins.
+- 94 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 41 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py). Avigal PIN changed 2026-10-10 (value in app/auth.py; local + production auth.json both rehashed; `init_auth` only seeds when auth.json is missing, so a PIN change always needs the out-of-band rehash on the server)
 - PWA installable on smartphones
@@ -57,7 +58,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | qr_module.py | QR code generation with Fernet encryption |
 | pdf_module.py | PDF + JPEG generation via reportlab + bidi + PyMuPDF. `_STRINGS` = printed text per ticket language (he/en). 2026-09 design: watercolor bg, brand header image, oval photo, QR + voucher ID at bottom. `render_preview()` = on-the-fly draft render |
 | images.py | Voucher image library (assets/voucher_images + library.json): default + history, upload/validate |
-| settings.py | config/settings.json — default location (+ default_location_en), notify_email, default_terms (+ default_terms_en), price_list (kind × יחיד/זוגי × entries → price) |
+| settings.py | config/settings.json — default_language (he/en), default location (+ default_location_en), notify_email, default_terms (+ default_terms_en), price_list (kind × יחיד/זוגי × entries → price) |
 | database.py | engine + `_migrate()`: adds missing columns, `sent`→`active`, legacy paid rows, back-fills one consumed entry per used ticket (idempotent, runs on every startup) |
 
 ### app/routers/
@@ -78,7 +79,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | voucher_view.html | Ticket detail: fields (incl. ticket language — select while unsent, read-only after), payment card (price/discount, send payment request WA/email/copy, mark paid), entries card (hold / consume / cancel / walk-in), action buttons per status, send history |
 | new_voucher.html | New ticket: kind toggle (שובר/כרטיסיה), language toggle (עברית/English — swaps location + terms defaults), entries presets, price list lookup + discount, terms, orderer search/create |
 | all_vouchers.html | Main screen: all tickets table (kind, entries x/N, price, status), + שובר / + כרטיסיה |
-| settings.html | Price list rows + default terms (HE + EN) + default location (HE + EN) |
+| settings.html | Price list rows + default ticket language + default terms (HE + EN) + default location (HE + EN) |
 | _macros.html | status_badge / kind_badge / entries_badge / price_text Jinja macros |
 | orderers.html | All orderers with voucher counts |
 | voucher_pdf.html | PDF template (reference only — reportlab used instead) |
@@ -138,6 +139,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Payment message in the other language uses that language's default terms from settings (the ticket's stored terms are used only when they match).
 - Ticket page: "שפת המסמך" toggle (עברית/English, starts on the default) next to the image/PDF toggle; drives preview/PDF links (`a.doc-link`), WA share file, share title, payment text and the language posted with send/resend/payment request. Inline JS syntax-checked with node after render.
 - Tests: 93 (second-language document + consume refresh, default language change after send, payment text in other language, ?lang= API routes + resend logging).
+- Part 3 (same day): system-wide default language on the settings page (`settings.get_default_language`, radio עברית/English). `rules._clean_language(None)` and the new-ticket form / API fall back to it; the form starts with the matching location + terms defaults. 94 tests.
 
 ## What Was Done This Session (2026-10-22) — English tickets
 - Koby: "allow english vouchers" — keep the Hebrew brand header image, English payment message too.

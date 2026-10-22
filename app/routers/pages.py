@@ -155,6 +155,7 @@ def new_voucher_page(request: Request, db: Session = Depends(get_db),
         "default_expiry": (date.today() + timedelta(days=182)).isoformat(),
         "default_location": settings.get_default_location(),
         "default_location_en": settings.get_default_location_en(),
+        "default_language": settings.get_default_language(),
         "price_list_json": json.dumps(settings.get_price_list(), ensure_ascii=False),
         "default_terms":  settings.get_default_terms(),
         "default_terms_en": settings.get_default_terms_en(),
@@ -173,11 +174,13 @@ def settings_page(request: Request):
         "default_terms_en": settings.get_default_terms_en(),
         "default_location": settings.get_default_location(),
         "default_location_en": settings.get_default_location_en(),
+        "default_language": settings.get_default_language(),
     })
 
 
 @router.post("/form/settings")
 async def form_save_settings(
+    default_language: str = Form("he"),
     default_terms:    str = Form(""),
     default_terms_en: str = Form(""),
     default_location: str = Form(""),
@@ -195,6 +198,7 @@ async def form_save_settings(
                 continue   # blank row from the "add row" template
             rows.append({"kind": k, "voucher_type": t, "entries": n, "price": p})
         settings.set_price_list(rows)
+        settings.set_default_language(default_language)
         settings.set_default_terms(default_terms)
         settings.set_default_terms_en(default_terms_en)
         if default_location.strip():
@@ -403,7 +407,7 @@ async def form_create_voucher_full(
     location:       Optional[str] = Form(None),
     kind:           str           = Form("VOUCHER"),
     entries_total:  str           = Form("1"),
-    language:       str           = Form("he"),
+    language:       Optional[str] = Form(None),   # None = system default (settings)
     list_price:     Optional[str] = Form(None),
     discount:       Optional[str] = Form(None),
     price:          Optional[str] = Form(None),
@@ -442,7 +446,7 @@ async def form_create_voucher_full(
             discount       = discount or None,
             price          = price or None,
             terms          = (terms if terms is not None and terms.strip() else None),
-            language       = language,
+            language       = language or None,
         )
         return _flash(f"/vouchers/{v.voucher_id}/view", "הכרטיס נוצר בהצלחה")
     except rules.RulesError as e:
