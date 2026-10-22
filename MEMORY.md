@@ -139,6 +139,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Payment message in the other language uses that language's default terms from settings (the ticket's stored terms are used only when they match).
 - Ticket page: "שפת המסמך" toggle (עברית/English, starts on the default) next to the image/PDF toggle; drives preview/PDF links (`a.doc-link`), WA share file, share title, payment text and the language posted with send/resend/payment request. Inline JS syntax-checked with node after render.
 - Tests: 93 (second-language document + consume refresh, default language change after send, payment text in other language, ?lang= API routes + resend logging).
+- Config backup to OneDrive (/backup) run 2026-10-22 18:43 — no failures.
 - Part 3 (same day): system-wide default language on the settings page (`settings.get_default_language`, radio עברית/English). `rules._clean_language(None)` and the new-ticket form / API fall back to it; the form starts with the matching location + terms defaults. 94 tests.
 
 ## What Was Done This Session (2026-10-22) — English tickets
