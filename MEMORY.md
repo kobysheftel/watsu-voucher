@@ -6,8 +6,8 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 
 ## Status
 - V1 complete and deployed to production; phase 2 started 2026-09-09 (new voucher design)
-- **V2 phase A (tickets + entries + manual payment) implemented locally 2026-09-13 — NOT yet deployed.** Design: `docs/DESIGN-V2-TICKETS.md`
-- **English tickets added locally 2026-10-22 — NOT yet deployed** (per-ticket `language` he/en; see session notes below)
+- V2 phase A (tickets + entries + manual payment) implemented 2026-09-13, deployed 2026-10-22. Design: `docs/DESIGN-V2-TICKETS.md`
+- **V2 phase A + English tickets DEPLOYED to production 2026-10-22 11:50** (commit 425a7a6; pre-deploy backups on server: `vouchers.db.bak-20261022-*`, `config/settings.json.bak-20261022-*`). Migration verified: 3 active tickets, `language` column present.
 - 90 tests passing (`venv\Scripts\python -m pytest -q`) — 53 legacy + 37 in tests/test_tickets.py
 - Branch: master, remote: origin (GitHub public repo) — local = GitHub = production at every deploy
 - Biometric auth (WebAuthn + PIN) — two users, Koby + Avigal (seed PINs in app/auth.py). Avigal PIN changed 2026-10-10 (value in app/auth.py; local + production auth.json both rehashed; `init_auth` only seeds when auth.json is missing, so a PIN change always needs the out-of-band rehash on the server)
@@ -136,7 +136,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - `rules.payment_request_text` → English message for English tickets (greeting, product, "Price: N ILS", terms, closing).
 - Settings gained English defaults: `default_location_en` ("Hod HaSharon") and `default_terms_en`, editable on /settings/view; `settings.default_location_for()` / `default_terms_for()` pick by language. New-ticket form swaps location + terms to the language default when the language toggle changes (unless the user typed their own). "Make permanent" location on an English ticket updates the English default.
 - Visual check done: English voucher (greeting), English 10-entry pass with 3 used, Hebrew voucher unchanged. Admin UI stays Hebrew; notification e-mail to Koby stays Hebrew.
-- Not pushed (push = deploy of unreleased V2 phase A + this).
+- Deployed the same day: push → server git pull → `systemctl restart vouchers`. No requirements change, no manual DB step (startup migration added the column).
 
 ## What Was Done This Session (2026-10-10) — Avigal PIN change
 - Avigal's PIN changed (new value = seed in `app/auth.py`, `tests/test_api.py` updated, local `config/auth.json` rehashed (commit 0e0d091, NOT pushed — pushing would deploy the unreleased V2 phase A code).
