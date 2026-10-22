@@ -74,10 +74,10 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 | base.html | Base layout (RTL Hebrew, Bootstrap 5, PWA, inactivity lock, logout) |
 | home.html | Search orderer page |
 | holder.html | Orderer detail + voucher list with inline actions |
-| voucher_view.html | Ticket detail: fields, payment card (price/discount, send payment request WA/email/copy, mark paid), entries card (hold / consume / cancel / walk-in), action buttons per status, send history |
-| new_voucher.html | New ticket: kind toggle (שובר/כרטיסיה), entries presets, price list lookup + discount, terms, orderer search/create |
+| voucher_view.html | Ticket detail: fields (incl. ticket language — select while unsent, read-only after), payment card (price/discount, send payment request WA/email/copy, mark paid), entries card (hold / consume / cancel / walk-in), action buttons per status, send history |
+| new_voucher.html | New ticket: kind toggle (שובר/כרטיסיה), language toggle (עברית/English — swaps location + terms defaults), entries presets, price list lookup + discount, terms, orderer search/create |
 | all_vouchers.html | Main screen: all tickets table (kind, entries x/N, price, status), + שובר / + כרטיסיה |
-| settings.html | Price list rows + default terms + default location |
+| settings.html | Price list rows + default terms (HE + EN) + default location (HE + EN) |
 | _macros.html | status_badge / kind_badge / entries_badge / price_text Jinja macros |
 | orderers.html | All orderers with voucher counts |
 | voucher_pdf.html | PDF template (reference only — reportlab used instead) |
@@ -120,7 +120,7 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 |------|---------|
 | test_rules.py | Rules engine unit tests (21 tests) |
 | test_api.py | API endpoint tests (32 tests incl. auth + draft preview, with auth fixture) |
-| test_tickets.py | Phase A: passes, pricing, payment flow, entries, holder lock, legacy-DB migration, API flow, page rendering, settings form (29 tests) |
+| test_tickets.py | Phase A: passes, pricing, payment flow, entries, holder lock, legacy-DB migration, API flow, page rendering, settings form (30 tests) + English tickets: creation, validation, payment text, language freeze, English PDF, API, HTML form (7 tests) |
 
 ### config/ (git-ignored)
 | File | Purpose |
@@ -164,9 +164,9 @@ Deployed at https://vouchers.soulwaves.org. Code on GitHub: kobysheftel/watsu-vo
 - Wiped all 6 vouchers + 9 sendings + files on production at Koby's request; 4 orderers kept; backup `/root/vouchers-backup-20260909-1917/`.
 
 ## Next Steps to Resume
-- Commit 0e0d091 (Avigal PIN seed) is local only — it goes out with the phase A push below. ⚠️ Seed PINs live in `app/auth.py` in a PUBLIC GitHub repo — consider moving seeds to config/ (git-ignored) before the next push.
-- **Deploy phase A** (on Koby's request): `git push`, server `git pull && systemctl restart vouchers` — the migration runs itself on startup (no manual ALTER TABLE). Back up `/var/www/sites/vouchers/vouchers.db` first.
-- Koby to fill the price list + real terms text on /settings/view (production) and test the flow on the phone.
+- Everything is deployed (2026-10-22): local = GitHub = production at commit "save 2026-10-22". Nothing pending in code.
+- Koby / Avigal to fill the price list + real terms text (Hebrew AND English) and check both default locations on https://vouchers.soulwaves.org/settings/view, then test the flow on the phone (create an English voucher, send payment request, mark paid, send).
+- ⚠️ Seed PINs live in `app/auth.py` in a PUBLIC GitHub repo (now pushed) — consider moving seeds to config/ (git-ignored).
 - **Phase B — Green Invoice**: verify API docs (developers.morning.co / greeninvoice.docs.apiary.io — both failed to load 2026-09-13), then: create payment page in `rules.request_payment`, public webhook route `/api/payments/greeninvoice/notify` (add to `AuthMiddleware.PUBLIC_PREFIXES`), `/pay/thanks` page, credentials in `config/greeninvoice.json`.
 - Phase C: QR redeem page, auto-expire stale holds, real e-mail sending to customers.
 - Optional: rewrite GitHub history to purge old auth.json / voucher PDFs (needs force push — ask first).
